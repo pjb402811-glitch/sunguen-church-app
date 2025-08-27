@@ -131,6 +131,7 @@ interface Post {
   timestamp: any;
   author?: string;
   date?: string;
+  bibleVerse?: string;
 }
 
 // Generic Content Display Component
@@ -138,6 +139,7 @@ function ContentDisplay({ collectionName, title }: { collectionName: string; tit
   const { db } = useFirebase();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!db) return;
@@ -154,6 +156,10 @@ function ContentDisplay({ collectionName, title }: { collectionName: string; tit
     return () => unsubscribe();
   }, [db, collectionName]);
 
+  const toggleExpand = (postId: string) => {
+    setExpandedPostId(prevId => (prevId === postId ? null : postId));
+  };
+
   return (
     <div className="p-4 md:p-6">
       <h2 className="text-2xl font-bold mb-4 text-gray-100">{title}</h2>
@@ -164,16 +170,27 @@ function ContentDisplay({ collectionName, title }: { collectionName: string; tit
       ) : (
         <div className="space-y-4">
           {posts.map((post) => (
-            <div key={post.id} className="bg-gray-800 p-4 rounded-lg shadow">
-              <h3 className="text-xl font-semibold text-teal-400 mb-2">{post.title}</h3>
-              {(post.author || post.date) && (
-                <div className="text-xs text-gray-400 mb-2">
-                  {post.author && <span>작성자: {post.author}</span>}
-                  {post.author && post.date && <span className="mx-2">|</span>}
-                  {post.date && <span>날짜: {post.date}</span>}
+            <div key={post.id} className="bg-gray-800 rounded-lg shadow overflow-hidden transition-all duration-300">
+              <button onClick={() => toggleExpand(post.id)} className="w-full text-left p-4 focus:outline-none focus:bg-gray-700/50">
+                <h3 className="text-xl font-semibold text-teal-400 mb-2">{post.title}</h3>
+                {collectionName === 'sermons' && post.bibleVerse && (
+                  <p className="text-sm text-yellow-300 italic border-l-4 border-yellow-300 pl-3 mb-2">
+                    {post.bibleVerse}
+                  </p>
+                )}
+                {(post.author || post.date) && (
+                  <div className="text-sm text-gray-400 mb-2">
+                    {post.author && <span>{post.author}</span>}
+                    {post.author && post.date && <span className="mx-2">|</span>}
+                    {post.date && <span>{post.date}</span>}
+                  </div>
+                )}
+              </button>
+              {expandedPostId === post.id && (
+                <div className="p-4 pt-0">
+                  <p className="text-gray-300 whitespace-pre-wrap border-t border-gray-700 pt-4">{post.content}</p>
                 </div>
               )}
-              <p className="text-gray-300 whitespace-pre-wrap">{post.content}</p>
             </div>
           ))}
         </div>
@@ -250,6 +267,7 @@ function ContentManagement() {
   const { db } = useFirebase();
   const [activeAdminTab, setActiveAdminTab] = useState('sermons');
   const [title, setTitle] = useState('');
+  const [bibleVerse, setBibleVerse] = useState('');
   const [content, setContent] = useState('');
   const [author, setAuthor] = useState('');
   const [date, setDate] = useState('');
@@ -257,7 +275,8 @@ function ContentManagement() {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Post | null>(null);
 
-  const showExtraFields = activeAdminTab === 'sermons' || activeAdminTab === 'columns';
+  const showSermonFields = activeAdminTab === 'sermons';
+  const showAuthorDateFields = activeAdminTab === 'sermons' || activeAdminTab === 'columns';
 
   useEffect(() => {
     if (!db) return;
@@ -274,6 +293,7 @@ function ContentManagement() {
     setContent('');
     setAuthor('');
     setDate('');
+    setBibleVerse('');
     setEditingPost(null);
   };
 
@@ -286,7 +306,10 @@ function ContentManagement() {
       content,
     };
 
-    if (showExtraFields) {
+    if (showSermonFields) {
+        postData.bibleVerse = bibleVerse;
+    }
+    if (showAuthorDateFields) {
       postData.author = author;
       postData.date = date;
     }
@@ -309,6 +332,7 @@ function ContentManagement() {
     setEditingPost(post);
     setTitle(post.title);
     setContent(post.content);
+    setBibleVerse(post.bibleVerse || '');
     setAuthor(post.author || '');
     setDate(post.date || '');
     window.scrollTo(0, 0);
@@ -330,7 +354,7 @@ function ContentManagement() {
   
   const contentTabs = [
     { id: 'sermons', label: '예배말씀' },
-    { id: 'columns', label: '목회칼럼' },
+    { id: 'columns', label: '목회자칼럼' },
     { id: 'announcements', label: '공지사항' },
   ];
 
@@ -358,7 +382,10 @@ function ContentManagement() {
         <h3 className="text-xl font-semibold mb-4">{editingPost ? '게시물 수정' : '새 게시물 작성'}</h3>
         <div className="space-y-4">
           <input type="text" placeholder="제목" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" required />
-          {showExtraFields && (
+          {showSermonFields && (
+            <input type="text" placeholder="성경구절" value={bibleVerse} onChange={(e) => setBibleVerse(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
+          )}
+          {showAuthorDateFields && (
             <>
               <input type="text" placeholder="작성자" value={author} onChange={(e) => setAuthor(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
@@ -383,11 +410,14 @@ function ContentManagement() {
           <div key={post.id} className="bg-gray-800 p-4 rounded-lg flex justify-between items-start">
             <div>
               <h3 className="text-xl font-semibold text-teal-400 mb-2">{post.title}</h3>
+              {showSermonFields && post.bibleVerse && (
+                  <p className="text-sm text-yellow-300 italic mb-2">{post.bibleVerse}</p>
+              )}
                {(post.author || post.date) && (
-                <div className="text-xs text-gray-400 mb-2">
-                  {post.author && <span>작성자: {post.author}</span>}
+                <div className="text-sm text-gray-400 mb-2">
+                  {post.author && <span>{post.author}</span>}
                   {post.author && post.date && <span className="mx-2">|</span>}
-                  {post.date && <span>날짜: {post.date}</span>}
+                  {post.date && <span>{post.date}</span>}
                 </div>
               )}
               <p className="text-gray-300 whitespace-pre-wrap">{post.content}</p>
@@ -526,7 +556,7 @@ function App() {
   
   const tabs = [
     { id: 'sermons', label: '예배말씀' },
-    { id: 'columns', label: '목회칼럼' },
+    { id: 'columns', label: '목회자칼럼' },
     { id: 'announcements', label: '공지사항' },
     { id: 'admin', label: '관리자' },
   ];
@@ -569,7 +599,7 @@ function App() {
 
       <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'sermons' && <ContentDisplay collectionName="sermons" title="예배말씀" />}
-        {activeTab === 'columns' && <ContentDisplay collectionName="columns" title="목회칼럼" />}
+        {activeTab === 'columns' && <ContentDisplay collectionName="columns" title="목회자칼럼" />}
         {activeTab === 'announcements' && <ContentDisplay collectionName="announcements" title="공지사항" />}
         {activeTab === 'admin' && <AdminPanel />}
       </main>
