@@ -1,11 +1,8 @@
-
-
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import ReactDOM from 'react-dom/client';
-// FIX: Updated Firebase imports from 'firebase/*' to '@firebase/*' to resolve module resolution errors. This is common if the project uses older v9 scoped packages.
 import { initializeApp, type FirebaseApp } from '@firebase/app';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, signInAnonymously, type Auth, type User } from '@firebase/auth';
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, onSnapshot, type Firestore } from '@firebase/firestore';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, signInAnonymously, updatePassword, reauthenticateWithCredential, EmailAuthProvider, type Auth, type User } from '@firebase/auth';
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, onSnapshot, orderBy, type Firestore } from '@firebase/firestore';
 
 // In a production environment, these would be managed via build-time environment variables.
 // For this context, we declare them as potentially available globals set in index.html.
@@ -27,15 +24,13 @@ interface FirebaseContextType {
   logout: () => Promise<void>;
 }
 
-// Firebase Context 생성
 const FirebaseContext = createContext<FirebaseContextType | null>(null);
 
-// FIX: Refactored to use an explicit props type for FirebaseProvider to improve type safety and clarity.
 type FirebaseProviderProps = {
-  children: React.ReactNode;
+  // Fix: Made children optional to resolve TypeScript error at usage site.
+  children?: React.ReactNode;
 };
 
-// Firebase Provider 컴포넌트
 function FirebaseProvider({ children }: FirebaseProviderProps) {
   const [app, setApp] = useState<FirebaseApp | null>(null);
   const [db, setDb] = useState<Firestore | null>(null);
@@ -54,7 +49,7 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
       const adminId = typeof __admin_user_id !== 'undefined' ? __admin_user_id : null;
 
       if (!Object.keys(firebaseConfig).length || firebaseConfig.apiKey === "YOUR_API_KEY") {
-        console.error("Firebase config is missing or using placeholder values. Please ensure __firebase_config is set with your actual project credentials in index.html.");
+        console.error("Firebase config is missing or using placeholder values.");
         setIsAuthReady(true);
         return;
       }
@@ -75,7 +70,6 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
           const isAdminUser = !!(adminId && currentUser.uid === adminId && adminId !== 'PASTE_YOUR_ADMIN_UID_HERE');
           setIsAdmin(isAdminUser);
         } else {
-          // User logged out, so sign them in anonymously for read-only access.
           setUser(null);
           setUserId(null);
           setIsAdmin(false);
@@ -89,7 +83,6 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
         setIsAuthReady(true);
       });
 
-      // Sign in anonymously on initial load if no user is present
       if (!firebaseAuth.currentUser) {
           signInAnonymously(firebaseAuth).catch(error => {
               console.error("Initial anonymous sign-in failed:", error);
@@ -123,7 +116,6 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
   );
 }
 
-// Firebase Hooks
 function useFirebase() {
   const context = useContext(FirebaseContext);
   if (!context) {
@@ -132,128 +124,48 @@ function useFirebase() {
   return context;
 }
 
-// App 컴포넌트
-function App() {
-  const [activeTab, setActiveTab] = useState('sermons');
-  const { isAdmin } = useFirebase();
-
-  const tabs = [
-    { id: 'sermons', name: '예배말씀' },
-    { id: 'columns', name: '목회자칼럼' },
-    { id: 'announcements', name: '공지사항' },
-    { id: 'admin', name: '관리자' },
-  ];
-
-  return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
-      <header className="bg-gray-800 shadow-lg sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-white">성은감리교회</h1>
-          <nav className="hidden md:flex space-x-4">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`text-lg font-medium transition-colors duration-200 ${
-                  activeTab === tab.id ? 'text-indigo-400' : 'text-gray-300 hover:text-indigo-400'
-                }`}
-              >
-                {tab.name}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </header>
-      
-      <main className="flex-grow container mx-auto px-4 py-8">
-        {activeTab === 'sermons' && <ContentList contentType="sermons" title="예배말씀" />}
-        {activeTab === 'columns' && <ContentList contentType="columns" title="목회자칼럼" />}
-        {activeTab === 'announcements' && <ContentList contentType="announcements" title="공지사항" />}
-        {activeTab === 'admin' && <AdminPanel />}
-      </main>
-
-      <footer className="bg-gray-800 mt-auto">
-        <div className="container mx-auto px-4 py-4 text-center text-gray-400">
-          &copy; {new Date().getFullYear()} 성은감리교회. All rights reserved.
-        </div>
-      </footer>
-    </div>
-  );
+// Data types
+interface Post {
+  id: string;
+  title: string;
+  content: string;
+  timestamp: any;
 }
 
-
-// 공통 콘텐츠 관리 함수
-const getContentCollectionPath = (appId: string, contentType: string) => `/artifacts/${appId}/public/data/${contentType}`;
-
-// 콘텐츠 리스트 컴포넌트
-function ContentList({ contentType, title }: { contentType: string, title: string }) {
-  const { db, appId, isAuthReady } = useFirebase();
-  const [items, setItems] = useState<any[]>([]);
+// Generic Content Display Component
+function ContentDisplay({ collectionName, title }: { collectionName: string; title: string }) {
+  const { db } = useFirebase();
+  const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!db || !isAuthReady || !appId) {
-        if (!isAuthReady) {
-            // Still waiting for auth to be ready, don't show an error yet
-        } else {
-             setError("데이터베이스에 연결할 수 없습니다.");
-        }
-        setLoading(false);
-        return;
-    };
-
-    const collectionPath = getContentCollectionPath(appId, contentType);
-    const q = query(collection(db, collectionPath));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedItems = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      fetchedItems.sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
-      setItems(fetchedItems);
+    if (!db) return;
+    setLoading(true);
+    const q = query(collection(db, collectionName), orderBy('timestamp', 'desc'));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const postsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
+      setPosts(postsData);
       setLoading(false);
-      setError(null);
-    }, (err) => {
-      console.error("Error fetching content:", err);
-      setError("콘텐츠를 불러오는 데 실패했습니다. Firebase 설정을 확인해주세요.");
+    }, (error) => {
+      console.error(`Error fetching ${collectionName}:`, error);
       setLoading(false);
     });
-
     return () => unsubscribe();
-  }, [db, appId, contentType, isAuthReady]);
-
-  if (loading) return <div className="text-center p-4 text-white">로딩 중...</div>;
-  if (error) return <div className="text-center p-4 text-red-400">{error}</div>;
+  }, [db, collectionName]);
 
   return (
-    <div className="p-4 bg-gray-800 rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-4 text-white">{title}</h2>
-      {items.length === 0 ? (
-        <p className="text-gray-400">등록된 {title}이(가) 없습니다.</p>
+    <div className="p-4 md:p-6">
+      <h2 className="text-2xl font-bold mb-4 text-gray-100">{title}</h2>
+      {loading ? (
+        <p className="text-gray-400">콘텐츠를 불러오는 중입니다...</p>
+      ) : posts.length === 0 ? (
+        <p className="text-gray-400">아직 등록된 게시물이 없습니다.</p>
       ) : (
         <div className="space-y-4">
-          {items.map(item => (
-            <div key={item.id} className="border border-gray-700 p-4 rounded-md bg-gray-700">
-              <h3 className="text-xl font-semibold text-white">{item.title}</h3>
-              {contentType === 'sermons' && (
-                <div className="text-sm text-gray-400 mt-1 space-y-1">
-                  {(item.author || item.sermonDate) && <p className="space-x-2">{item.author && <span>{item.author}</span>}{item.author && item.sermonDate && <span>|</span>}{item.sermonDate && <span>{item.sermonDate}</span>}</p>}
-                  {item.bibleVerse && <p>성경구절: {item.bibleVerse}</p>}
-                </div>
-              )}
-              {contentType === 'columns' && (
-                <div className="text-sm text-gray-400 mt-1">
-                   {(item.author || item.columnDate) && <p className="space-x-2">{item.author && <span>{item.author}</span>}{item.author && item.columnDate && <span>|</span>}{item.columnDate && <span>{item.columnDate}</span>}</p>}
-                </div>
-              )}
-              <p className="text-gray-300 mt-2 whitespace-pre-wrap">{item.content}</p>
-              {item.timestamp && (
-                <p className="text-sm text-gray-500 mt-2">
-                  최종 업데이트: {new Date(item.timestamp.toDate()).toLocaleString()}
-                </p>
-              )}
+          {posts.map((post) => (
+            <div key={post.id} className="bg-gray-800 p-4 rounded-lg shadow">
+              <h3 className="text-xl font-semibold text-teal-400 mb-2">{post.title}</h3>
+              <p className="text-gray-300 whitespace-pre-wrap">{post.content}</p>
             </div>
           ))}
         </div>
@@ -262,295 +174,208 @@ function ContentList({ contentType, title }: { contentType: string, title: strin
   );
 }
 
-// 관리자 패널 컴포넌트
+
+// Admin Panel Component
 function AdminPanel() {
-  const { db, auth, appId, isAdmin, isAuthReady, userId, logout, user } = useFirebase();
-  const [currentAdminTab, setCurrentAdminTab] = useState('sermons');
-  const [formTitle, setFormTitle] = useState('');
-  const [formContent, setFormContent] = useState('');
-  const [formAuthor, setFormAuthor] = useState('');
-  const [formSermonDate, setFormSermonDate] = useState(new Date().toISOString().split('T')[0]);
-  const [formBibleVerse, setFormBibleVerse] = useState('');
-  const [formColumnAuthor, setFormColumnAuthor] = useState('');
-  const [formColumnDate, setFormColumnDate] = useState(new Date().toISOString().split('T')[0]);
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [message, setMessage] = useState('');
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
-
-  const adminTabs = [
-    { id: 'sermons', name: '예배말씀 관리' },
-    { id: 'columns', name: '목회자칼럼 관리' },
-    { id: 'announcements', name: '공지사항 관리' },
-  ];
-
-  const handleAdminLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const adminEmail = typeof __admin_email !== 'undefined' ? __admin_email : '';
-
-    if (!adminEmail || adminEmail === 'admin@example.com' || adminEmail === '') {
-        setLoginError('관리자 이메일이 설정되지 않았습니다. index.html 파일을 확인해주세요.');
-        return;
-    }
-
-    if (!auth || !loginPassword) {
-      setLoginError('비밀번호를 입력해주세요.');
-      return;
-    }
-    try {
-      setLoginError('');
-      await signInWithEmailAndPassword(auth, adminEmail, loginPassword);
-    } catch (error: any) {
-      console.error("Admin login error:", error);
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        setLoginError('비밀번호가 올바르지 않습니다.');
-      } else {
-        setLoginError('로그인 중 오류가 발생했습니다. 다시 시도해주세요.');
-      }
-    }
-  };
-
+  const { db, auth, logout, isAdmin } = useFirebase();
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [activeAdminTab, setActiveAdminTab] = useState('sermons');
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<Post | null>(null);
 
   useEffect(() => {
-    if (!db || !isAuthReady || !isAdmin || !appId) {
-      setItems([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    const collectionPath = getContentCollectionPath(appId, currentAdminTab);
-    const q = query(collection(db, collectionPath));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      fetchedItems.sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
-      setItems(fetchedItems);
-      setLoading(false);
-    }, (err) => {
-      console.error("Error fetching admin content:", err);
-      setError("관리할 콘텐츠를 불러오는 데 실패했습니다.");
-      setLoading(false);
+    if (!db || !isAdmin) return;
+    const q = query(collection(db, activeAdminTab), orderBy('timestamp', 'desc'));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const postsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
+      setPosts(postsData);
     });
-
     return () => unsubscribe();
-  }, [db, appId, currentAdminTab, isAdmin, isAuthReady]);
+  }, [db, isAdmin, activeAdminTab]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auth) return;
+    setError('');
+    try {
+      const adminEmail = typeof __admin_email !== 'undefined' ? __admin_email : '';
+      if (!adminEmail || adminEmail === 'PASTE_YOUR_ADMIN_EMAIL_HERE') {
+        setError('관리자 이메일이 설정되지 않았습니다.');
+        return;
+      }
+      await signInWithEmailAndPassword(auth, adminEmail, password);
+    } catch (err) {
+      setError('로그인에 실패했습니다. 비밀번호를 확인해주세요.');
+      console.error(err);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!db || !isAdmin || !appId || !formTitle || !formContent) {
-      setMessage('제목과 내용을 모두 입력해주세요.');
-      return;
-    }
-
-    let dataToSave: any = {
-      title: formTitle,
-      content: formContent,
-      timestamp: serverTimestamp(),
-    };
-
-    if (currentAdminTab === 'sermons') {
-      dataToSave = { ...dataToSave, author: formAuthor, sermonDate: formSermonDate, bibleVerse: formBibleVerse };
-    } else if (currentAdminTab === 'columns') {
-      dataToSave = { ...dataToSave, author: formColumnAuthor, columnDate: formColumnDate };
-    }
+    if (!db || !title.trim() || !content.trim()) return;
 
     try {
-      const collectionRef = collection(db, getContentCollectionPath(appId, currentAdminTab));
-      if (editingItemId) {
-        await updateDoc(doc(collectionRef, editingItemId), dataToSave);
-        setMessage('콘텐츠가 성공적으로 수정되었습니다.');
+      if (editingPost) {
+        const postRef = doc(db, activeAdminTab, editingPost.id);
+        await updateDoc(postRef, {
+          title,
+          content,
+        });
+        setEditingPost(null);
       } else {
-        await addDoc(collectionRef, dataToSave);
-        setMessage('콘텐츠가 성공적으로 등록되었습니다.');
+        await addDoc(collection(db, activeAdminTab), {
+          title,
+          content,
+          timestamp: serverTimestamp(),
+        });
       }
-      setFormTitle('');
-      setFormContent('');
-      setFormAuthor('');
-      setFormSermonDate(new Date().toISOString().split('T')[0]);
-      setFormBibleVerse('');
-      setFormColumnAuthor('');
-      setFormColumnDate(new Date().toISOString().split('T')[0]);
-      setEditingItemId(null);
-    } catch (err: any) {
-      console.error("Error adding/updating document:", err);
-      setMessage(`오류 발생: ${err.message}`);
+      setTitle('');
+      setContent('');
+    } catch (error) {
+      console.error("Error saving document: ", error);
     }
+  };
+
+  const startEdit = (post: Post) => {
+    setEditingPost(post);
+    setTitle(post.title);
+    setContent(post.content);
+    window.scrollTo(0, 0);
   };
   
-  const handleEdit = (item: any) => {
-    setFormTitle(item.title);
-    setFormContent(item.content);
-    setEditingItemId(item.id);
-    setMessage('');
-    setFormAuthor('');
-    setFormSermonDate(new Date().toISOString().split('T')[0]);
-    setFormBibleVerse('');
-    setFormColumnAuthor('');
-    setFormColumnDate(new Date().toISOString().split('T')[0]);
-
-    if (currentAdminTab === 'sermons') {
-      setFormAuthor(item.author || '');
-      setFormSermonDate(item.sermonDate || new Date().toISOString().split('T')[0]);
-      setFormBibleVerse(item.bibleVerse || '');
-    } else if (currentAdminTab === 'columns') {
-      setFormColumnAuthor(item.author || '');
-      setFormColumnDate(item.columnDate || new Date().toISOString().split('T')[0]);
-    }
+  const cancelEdit = () => {
+      setEditingPost(null);
+      setTitle('');
+      setContent('');
   };
 
-  const handleDelete = async (itemId: string) => {
-    if (!db || !isAdmin || !appId) return;
+  const deletePost = async (id: string) => {
+    if (!db) return;
     try {
-      const collectionPath = getContentCollectionPath(appId, currentAdminTab);
-      await deleteDoc(doc(db, collectionPath, itemId));
-      setMessage('콘텐츠가 성공적으로 삭제되었습니다.');
-      setConfirmDeleteId(null);
-    } catch (err: any) {
-      console.error("Error deleting document:", err);
-      setMessage(`오류 발생: ${err.message}`);
+      await deleteDoc(doc(db, activeAdminTab, id));
+      setShowDeleteConfirm(null);
+    } catch (error) {
+      console.error("Error deleting document: ", error);
     }
   };
-
-  if (!isAuthReady) {
-    return <div className="text-center p-4 text-white">인증 상태 확인 중...</div>;
-  }
 
   if (!isAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-800 text-gray-200 p-8 rounded-lg shadow-md">
-        <h2 className="text-2xl font-bold mb-4">관리자 로그인</h2>
-        <form onSubmit={handleAdminLogin} className="w-full max-w-sm space-y-4">
-            <div>
-              <label htmlFor="password"className="block text-gray-200 text-sm font-bold mb-2">비밀번호</label>
-              <input 
-                type="password" 
-                id="password" 
-                value={loginPassword} 
-                onChange={(e) => setLoginPassword(e.target.value)} 
-                className="shadow appearance-none border border-gray-600 rounded-md w-full py-2 px-3 bg-gray-700 text-white leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                placeholder="비밀번호를 입력하세요" 
-                required 
-              />
-            </div>
-            {loginError && <p className="text-red-400 text-sm text-center">{loginError}</p>}
-            <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-md transition-colors duration-200 text-lg">
-              로그인
-            </button>
+      <div className="p-4 md:p-6 max-w-md mx-auto">
+        <h2 className="text-2xl font-bold mb-4 text-center">관리자 로그인</h2>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-400">비밀번호</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500"
+              required
+            />
+          </div>
+          {error && <p className="text-red-400 text-sm">{error}</p>}
+          <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
+            로그인
+          </button>
         </form>
-        {userId && <p className="text-md text-gray-500 mt-6 pt-4 border-t border-gray-700 w-full text-center">현재 사용자 ID (설정 확인용): <span className="font-mono bg-gray-700 p-1 rounded text-gray-200">{userId}</span></p>}
       </div>
     );
   }
 
+  const adminTabs = [
+    { id: 'sermons', label: '예배말씀' },
+    { id: 'columns', label: '목회칼럼' },
+    { id: 'announcements', label: '공지사항' },
+  ];
+
   return (
-    <div className="p-4 bg-gray-800 rounded-lg shadow-md">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold text-white">관리자 페이지</h2>
-        <button onClick={logout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 text-sm">로그아웃</button>
+    <div className="p-4 md:p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold">콘텐츠 관리</h2>
+        <button onClick={logout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
+          로그아웃
+        </button>
       </div>
-      <p className="text-sm text-gray-400 mb-4">관리자 User ID: <span className="font-mono bg-gray-700 p-1 rounded text-gray-200">{userId}</span> ({user?.email})</p>
-
-      <div className="mb-6 flex space-x-2 border-b border-gray-700 pb-2">
-        {adminTabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => {
-              setCurrentAdminTab(tab.id);
-              setFormTitle(''); setFormContent(''); setEditingItemId(null); setMessage(''); setError(null); setLoading(true);
-              setFormAuthor(''); setFormSermonDate(new Date().toISOString().split('T')[0]); setFormBibleVerse('');
-              setFormColumnAuthor(''); setFormColumnDate(new Date().toISOString().split('T')[0]);
-            }}
-            className={`px-4 py-2 rounded-t-lg transition-colors duration-200 ${currentAdminTab === tab.id ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-          >{tab.name}</button>
-        ))}
-      </div>
-
-      {message && <div className={`p-3 mb-4 rounded-md ${message.startsWith('오류') ? 'bg-red-800 text-red-100' : 'bg-green-800 text-green-100'}`}>{message}</div>}
-
-      <form onSubmit={handleSubmit} className="bg-gray-700 p-6 rounded-lg shadow-inner mb-6">
-        <h3 className="text-xl font-semibold mb-4 text-white">{editingItemId ? '콘텐츠 수정' : '새 콘텐츠 등록'}</h3>
-        <div className="mb-4">
-          <label htmlFor="title" className="block text-gray-200 text-sm font-bold mb-2">제목</label>
-          <input type="text" id="title" value={formTitle} onChange={(e) => setFormTitle(e.target.value)} className="shadow appearance-none border border-gray-600 rounded-md w-full py-2 px-3 bg-gray-800 text-white leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="제목을 입력하세요" />
-        </div>
-        {currentAdminTab === 'sermons' && (
-          <>
-            <div className="mb-4">
-              <label htmlFor="author" className="block text-gray-200 text-sm font-bold mb-2">작성자</label>
-              <input type="text" id="author" value={formAuthor} onChange={(e) => setFormAuthor(e.target.value)} className="shadow appearance-none border border-gray-600 rounded-md w-full py-2 px-3 bg-gray-800 text-white leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="작성자를 입력하세요" />
-            </div>
-            <div className="mb-4">
-              <label htmlFor="sermonDate" className="block text-gray-200 text-sm font-bold mb-2">날짜</label>
-              <input type="date" id="sermonDate" value={formSermonDate} onChange={(e) => setFormSermonDate(e.target.value)} className="shadow appearance-none border border-gray-600 rounded-md w-full py-2 px-3 bg-gray-800 text-white leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-            </div>
-            <div className="mb-4">
-              <label htmlFor="bibleVerse" className="block text-gray-200 text-sm font-bold mb-2">성경구절</label>
-              <input type="text" id="bibleVerse" value={formBibleVerse} onChange={(e) => setFormBibleVerse(e.target.value)} className="shadow appearance-none border border-gray-600 rounded-md w-full py-2 px-3 bg-gray-800 text-white leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="성경구절을 입력하세요" />
-            </div>
-          </>
-        )}
-        {currentAdminTab === 'columns' && (
-           <>
-            <div className="mb-4">
-              <label htmlFor="columnAuthor" className="block text-gray-200 text-sm font-bold mb-2">작성자</label>
-              <input type="text" id="columnAuthor" value={formColumnAuthor} onChange={(e) => setFormColumnAuthor(e.target.value)} className="shadow appearance-none border border-gray-600 rounded-md w-full py-2 px-3 bg-gray-800 text-white leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="작성자를 입력하세요" />
-            </div>
-            <div className="mb-4">
-              <label htmlFor="columnDate" className="block text-gray-200 text-sm font-bold mb-2">날짜</label>
-              <input type="date" id="columnDate" value={formColumnDate} onChange={(e) => setFormColumnDate(e.target.value)} className="shadow appearance-none border border-gray-600 rounded-md w-full py-2 px-3 bg-gray-800 text-white leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-            </div>
-          </>
-        )}
-        <div className="mb-4">
-          <label htmlFor="content" className="block text-gray-200 text-sm font-bold mb-2">내용</label>
-          <textarea id="content" value={formContent} onChange={(e) => setFormContent(e.target.value)} className="shadow appearance-none border border-gray-600 rounded-md w-full py-2 px-3 bg-gray-800 text-white leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 h-40" placeholder="내용을 입력하세요"></textarea>
-        </div>
-        <div className="flex items-center justify-between">
-          <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-            {editingItemId ? '수정하기' : '등록하기'}
-          </button>
-          {editingItemId && (
-            <button type="button" onClick={() => { setEditingItemId(null); setFormTitle(''); setFormContent(''); }} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-              취소
+      
+      <div className="mb-4 border-b border-gray-700">
+        <nav className="-mb-px flex space-x-4" aria-label="Tabs">
+          {adminTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => { setActiveAdminTab(tab.id); cancelEdit(); }}
+              className={`${
+                activeAdminTab === tab.id
+                  ? 'border-teal-400 text-teal-400'
+                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
+              } whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors`}
+            >
+              {tab.label}
             </button>
-          )}
+          ))}
+        </nav>
+      </div>
+
+      <form onSubmit={handleSubmit} className="mb-8 bg-gray-800 p-4 rounded-lg">
+        <h3 className="text-xl font-semibold mb-4">{editingPost ? '게시물 수정' : '새 게시물 작성'}</h3>
+        <div className="space-y-4">
+          <input
+            type="text"
+            placeholder="제목"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500"
+            required
+          />
+          <textarea
+            placeholder="내용"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500"
+            rows={8}
+            required
+          />
+        </div>
+        <div className="mt-4 flex items-center space-x-2">
+            <button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
+              {editingPost ? '수정 완료' : '게시물 등록'}
+            </button>
+            {editingPost && (
+                <button type="button" onClick={cancelEdit} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
+                취소
+                </button>
+            )}
         </div>
       </form>
-      
-      <div className="mt-8">
-        <h3 className="text-xl font-semibold mb-4 text-white">등록된 콘텐츠 목록</h3>
-        {loading ? <p className="text-gray-400">목록 로딩 중...</p> : error ? <p className="text-red-400">{error}</p> : items.length === 0 ? <p className="text-gray-400">등록된 콘텐츠가 없습니다.</p> : (
-          <ul className="space-y-2">
-            {items.map(item => (
-              <li key={item.id} className="flex items-center justify-between bg-gray-700 p-3 rounded-md">
-                <span className="text-white">{item.title}</span>
-                <div className="space-x-2">
-                  <button onClick={() => handleEdit(item)} className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-md">수정</button>
-                  <button onClick={() => setConfirmDeleteId(item.id)} className="text-sm bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded-md">삭제</button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
 
-      {confirmDeleteId && (
+      <div className="space-y-4">
+        {posts.map(post => (
+          <div key={post.id} className="bg-gray-800 p-4 rounded-lg flex justify-between items-start">
+            <div>
+              <h3 className="text-xl font-semibold text-teal-400 mb-2">{post.title}</h3>
+              <p className="text-gray-300 whitespace-pre-wrap">{post.content}</p>
+            </div>
+            <div className="flex space-x-2 flex-shrink-0 ml-4">
+              <button onClick={() => startEdit(post)} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">수정</button>
+              <button onClick={() => setShowDeleteConfirm(post)} className="bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">삭제</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-6 rounded-lg shadow-xl text-center">
-            <h3 className="text-lg font-bold text-white mb-4">정말로 삭제하시겠습니까?</h3>
-            <p className="text-gray-300 mb-6">이 작업은 되돌릴 수 없습니다.</p>
-            <div className="flex justify-center space-x-4">
-              <button onClick={() => handleDelete(confirmDeleteId)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-                삭제
-              </button>
-              <button onClick={() => setConfirmDeleteId(null)} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">
-                취소
-              </button>
+          <div className="bg-gray-800 rounded-lg p-6 max-w-sm w-full mx-4">
+            <h3 className="text-lg font-bold text-white">삭제 확인</h3>
+            <p className="text-gray-300 mt-2 mb-4">"{showDeleteConfirm.title}" 게시물을 정말로 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.</p>
+            <div className="flex justify-end space-x-2">
+              <button onClick={() => setShowDeleteConfirm(null)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">취소</button>
+              <button onClick={() => deletePost(showDeleteConfirm.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md">삭제</button>
             </div>
           </div>
         </div>
@@ -559,16 +384,157 @@ function AdminPanel() {
   );
 }
 
-const rootElement = document.getElementById('root');
-if (rootElement) {
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(
-    <React.StrictMode>
-      <FirebaseProvider>
-        <App />
-      </FirebaseProvider>
-    </React.StrictMode>
-  );
-} else {
-    console.error("Failed to find the root element");
+function PasswordChange() {
+    const { auth, user } = useFirebase();
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [message, setMessage] = useState('');
+    const [error, setError] = useState('');
+
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setMessage('');
+
+        if (newPassword !== confirmPassword) {
+            setError('새 비밀번호가 일치하지 않습니다.');
+            return;
+        }
+        if (!auth || !user || !user.email) {
+            setError('사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.');
+            return;
+        }
+
+        try {
+            const credential = EmailAuthProvider.credential(user.email, currentPassword);
+            await reauthenticateWithCredential(user, credential);
+            await updatePassword(user, newPassword);
+            setMessage('비밀번호가 성공적으로 변경되었습니다.');
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+        } catch (err) {
+            setError('비밀번호 변경에 실패했습니다. 현재 비밀번호를 확인해주세요.');
+            console.error(err);
+        }
+    };
+    
+    return (
+        <div className="p-4 md:p-6 max-w-md mx-auto">
+            <h2 className="text-2xl font-bold mb-6 text-center">비밀번호 변경</h2>
+            <form onSubmit={handleChangePassword} className="space-y-4">
+                <div>
+                    <label htmlFor="current-password"className="block text-sm font-medium text-gray-400">현재 비밀번호</label>
+                    <input id="current-password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
+                </div>
+                <div>
+                    <label htmlFor="new-password"className="block text-sm font-medium text-gray-400">새 비밀번호</label>
+                    <input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
+                </div>
+                <div>
+                    <label htmlFor="confirm-password"className="block text-sm font-medium text-gray-400">새 비밀번호 확인</label>
+                    <input id="confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
+                </div>
+                {error && <p className="text-red-400 text-sm">{error}</p>}
+                {message && <p className="text-green-400 text-sm">{message}</p>}
+                <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
+                    비밀번호 변경
+                </button>
+            </form>
+        </div>
+    );
 }
+
+
+// App Component
+function App() {
+  const [activeTab, setActiveTab] = useState('sermons');
+  const { isAuthReady, isAdmin } = useFirebase();
+
+  const tabColorClasses: { [key: string]: string } = {
+    sermons: 'bg-sky-600 hover:bg-sky-500',
+    columns: 'bg-emerald-600 hover:bg-emerald-500',
+    announcements: 'bg-orange-600 hover:bg-orange-500',
+    passwordChange: 'bg-indigo-600 hover:bg-indigo-500',
+    admin: 'bg-rose-600 hover:bg-rose-500',
+  };
+
+  if (!isAuthReady) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-900">
+        <div className="text-white text-xl">앱을 불러오는 중입니다...</div>
+      </div>
+    );
+  }
+  
+  const tabs = [
+    { id: 'sermons', label: '예배말씀' },
+    { id: 'columns', label: '목회칼럼' },
+    { id: 'announcements', label: '공지사항' },
+    { id: 'admin', label: '관리자' },
+  ];
+  
+  const adminTabs = [
+    ...tabs.filter(t => t.id !== 'admin'),
+    { id: 'passwordChange', label: '비밀번호 변경' },
+    { id: 'admin', label: '관리자' },
+  ];
+
+  const currentTabs = isAdmin ? adminTabs : tabs;
+
+  return (
+    <div className="min-h-screen flex flex-col bg-gray-900">
+      <header className="bg-gray-800 p-4 text-center shadow-lg">
+        <h1 className="text-2xl font-bold text-white">
+          성은감리교회
+          <span className="block text-xs text-gray-400 font-normal mt-1">(영혼을 구원하여 제자삼는 가정교회)</span>
+        </h1>
+      </header>
+
+      <nav className="bg-gray-800 sticky top-0 z-10 shadow">
+        <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
+          <div className="relative flex items-center justify-center h-16">
+            <div className="flex items-center justify-center sm:items-stretch sm:justify-start">
+              <div className="flex space-x-4">
+                {currentTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`${
+                      tabColorClasses[tab.id] || 'bg-gray-700 hover:bg-gray-600'
+                    } ${
+                      activeTab === tab.id
+                        ? 'text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-white'
+                        : 'text-gray-200 opacity-80 hover:opacity-100'
+                    } px-6 py-4 rounded-md text-lg font-medium transition-all duration-200`}
+                    aria-current={activeTab === tab.id ? 'page' : undefined}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {activeTab === 'sermons' && <ContentDisplay collectionName="sermons" title="예배말씀" />}
+        {activeTab === 'columns' && <ContentDisplay collectionName="columns" title="목회칼럼" />}
+        {activeTab === 'announcements' && <ContentDisplay collectionName="announcements" title="공지사항" />}
+        {activeTab === 'admin' && <AdminPanel />}
+        {isAdmin && activeTab === 'passwordChange' && <PasswordChange />}
+      </main>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
+root.render(
+  <React.StrictMode>
+    <FirebaseProvider>
+      <App />
+    </FirebaseProvider>
+  </React.StrictMode>
+);
