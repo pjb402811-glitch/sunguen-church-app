@@ -2,7 +2,7 @@ import React, { useState, useEffect, createContext, useContext } from 'react';
 import ReactDOM from 'react-dom/client';
 import { initializeApp, type FirebaseApp } from '@firebase/app';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, signInAnonymously, updatePassword, reauthenticateWithCredential, EmailAuthProvider, type Auth, type User } from '@firebase/auth';
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, onSnapshot, orderBy, type Firestore } from '@firebase/firestore';
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, onSnapshot, orderBy, limit, type Firestore } from '@firebase/firestore';
 
 // In a production environment, these would be managed via build-time environment variables.
 // For this context, we declare them as potentially available globals set in index.html.
@@ -22,6 +22,8 @@ interface FirebaseContextType {
   isAuthReady: boolean;
   appId: string;
   logout: () => Promise<void>;
+  newContent: { [key: string]: boolean };
+  markAsRead: (collectionName: string) => void;
 }
 
 const FirebaseContext = createContext<FirebaseContextType | null>(null);
@@ -39,6 +41,8 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [newContent, setNewContent] = useState<{ [key: string]: boolean }>({});
+  const [latestTimestamps, setLatestTimestamps] = useState<{ [key: string]: number }>({});
 
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
@@ -61,7 +65,7 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
       setDb(firestoreDb);
       setAuth(firebaseAuth);
 
-      const unsubscribe = onAuthStateChanged(firebaseAuth, async (currentUser) => {
+      const unsubscribeAuth = onAuthStateChanged(firebaseAuth, async (currentUser) => {
         if (currentUser) {
           setUser(currentUser);
           setUserId(currentUser.uid);
@@ -81,6 +85,27 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
         }
         setIsAuthReady(true);
       });
+      
+      const contentCollections = ['sermons', 'columns', 'announcements'];
+      const unsubscribers = contentCollections.map(collectionName => {
+        const q = query(collection(firestoreDb, collectionName), orderBy('timestamp', 'desc'), limit(1));
+        return onSnapshot(q, (querySnapshot) => {
+          if (!querySnapshot.empty) {
+            const latestPost = querySnapshot.docs[0].data();
+            const latestTimestamp = latestPost.timestamp?.toMillis();
+             if (latestTimestamp) {
+              setLatestTimestamps(prev => ({ ...prev, [collectionName]: latestTimestamp }));
+            }
+            const seenTimestamp = localStorage.getItem(`seenTimestamp_${collectionName}`);
+            
+            if (latestTimestamp && (!seenTimestamp || latestTimestamp > parseInt(seenTimestamp))) {
+              setNewContent(prev => ({ ...prev, [collectionName]: true }));
+            } else {
+              setNewContent(prev => ({ ...prev, [collectionName]: false }));
+            }
+          }
+        });
+      });
 
       if (!firebaseAuth.currentUser) {
           signInAnonymously(firebaseAuth).catch(error => {
@@ -88,12 +113,25 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
           });
       }
 
-      return () => unsubscribe();
+      return () => {
+        unsubscribeAuth();
+        unsubscribers.forEach(unsub => unsub());
+      };
     } catch (e) {
         console.error("Error initializing Firebase:", e);
         setIsAuthReady(true);
     }
   }, []);
+
+  const markAsRead = (collectionName: string) => {
+    if (newContent[collectionName]) {
+        setNewContent(prev => ({ ...prev, [collectionName]: false }));
+        const latestTimestamp = latestTimestamps[collectionName];
+        if (latestTimestamp) {
+            localStorage.setItem(`seenTimestamp_${collectionName}`, latestTimestamp.toString());
+        }
+    }
+  };
   
   const logout = async () => {
     if (!auth) return;
@@ -105,7 +143,7 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
   };
 
   const contextValue: FirebaseContextType = {
-    app, db, auth, user, userId, isAdmin, isAnonymous, isAuthReady, appId, logout
+    app, db, auth, user, userId, isAdmin, isAnonymous, isAuthReady, appId, logout, newContent, markAsRead
   };
 
   return (
@@ -274,6 +312,7 @@ function ContentManagement() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Post | null>(null);
+  const [expandedAdminPostId, setExpandedAdminPostId] = useState<string | null>(null);
 
   const showSermonFields = activeAdminTab === 'sermons';
   const showAuthorDateFields = activeAdminTab === 'sermons' || activeAdminTab === 'columns';
@@ -352,6 +391,10 @@ function ContentManagement() {
     }
   };
   
+  const toggleAdminExpand = (postId: string) => {
+    setExpandedAdminPostId(prevId => (prevId === postId ? null : postId));
+  };
+
   const contentTabs = [
     { id: 'sermons', label: '예배말씀' },
     { id: 'columns', label: '목회자칼럼' },
@@ -407,25 +450,38 @@ function ContentManagement() {
 
       <div className="space-y-4">
         {posts.map(post => (
-          <div key={post.id} className="bg-gray-800 p-4 rounded-lg flex justify-between items-start">
-            <div>
-              <h3 className="text-xl font-semibold text-teal-400 mb-2">{post.title}</h3>
-              {showSermonFields && post.bibleVerse && (
-                  <p className="text-sm text-yellow-300 italic mb-2">{post.bibleVerse}</p>
-              )}
-               {(post.author || post.date) && (
-                <div className="text-sm text-gray-400 mb-2">
-                  {post.author && <span>{post.author}</span>}
-                  {post.author && post.date && <span className="mx-2">|</span>}
-                  {post.date && <span>{post.date}</span>}
+          <div key={post.id} className="bg-gray-800 rounded-lg shadow overflow-hidden transition-all duration-300">
+             <button onClick={() => toggleAdminExpand(post.id)} className="w-full text-left p-4 focus:outline-none focus:bg-gray-700/50">
+                <div className="flex justify-between items-center w-full">
+                    <div>
+                        <h3 className="text-xl font-semibold text-teal-400">{post.title}</h3>
+                        {(post.author || post.date) && (
+                            <div className="text-sm text-gray-400 mt-1">
+                            {post.author && <span>{post.author}</span>}
+                            {post.author && post.date && <span className="mx-2">|</span>}
+                            {post.date && <span>{post.date}</span>}
+                            </div>
+                        )}
+                    </div>
+                    <svg className={`w-6 h-6 text-gray-400 transition-transform duration-300 transform flex-shrink-0 ml-4 ${expandedAdminPostId === post.id ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
                 </div>
-              )}
-              <p className="text-gray-300 whitespace-pre-wrap">{post.content}</p>
-            </div>
-            <div className="flex space-x-2 flex-shrink-0 ml-4">
-              <button onClick={() => startEdit(post)} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">수정</button>
-              <button onClick={() => setShowDeleteConfirm(post)} className="bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">삭제</button>
-            </div>
+             </button>
+            {expandedAdminPostId === post.id && (
+                <div className="p-4 pt-0">
+                    <div className="border-t border-gray-700 pt-4">
+                        {showSermonFields && post.bibleVerse && (
+                            <p className="text-sm text-yellow-300 italic mb-2">{post.bibleVerse}</p>
+                        )}
+                        <p className="text-gray-300 whitespace-pre-wrap mb-4">{post.content}</p>
+                        <div className="flex space-x-2 flex-shrink-0">
+                            <button onClick={() => startEdit(post)} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">수정</button>
+                            <button onClick={() => setShowDeleteConfirm(post)} className="bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">삭제</button>
+                        </div>
+                    </div>
+                </div>
+            )}
           </div>
         ))}
       </div>
@@ -537,7 +593,14 @@ function AdminPanel() {
 // App Component
 function App() {
   const [activeTab, setActiveTab] = useState('sermons');
-  const { isAuthReady } = useFirebase();
+  const { isAuthReady, newContent, markAsRead } = useFirebase();
+
+  const handleTabClick = (tabId: string) => {
+    setActiveTab(tabId);
+    if (['sermons', 'columns', 'announcements'].includes(tabId)) {
+        markAsRead(tabId);
+    }
+  };
 
   const tabColorClasses: { [key: string]: string } = {
     sermons: 'bg-sky-600 hover:bg-sky-500',
@@ -578,17 +641,20 @@ function App() {
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => handleTabClick(tab.id)}
                     className={`${
                       tabColorClasses[tab.id] || 'bg-gray-700 hover:bg-gray-600'
                     } ${
                       activeTab === tab.id
                         ? 'text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-white'
                         : 'text-gray-200 opacity-80 hover:opacity-100'
-                    } px-3 py-2 rounded-md text-sm font-medium transition-all duration-200`}
+                    } px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center`}
                     aria-current={activeTab === tab.id ? 'page' : undefined}
                   >
-                    {tab.label}
+                    <span>{tab.label}</span>
+                    {newContent[tab.id] && ['sermons', 'columns', 'announcements'].includes(tab.id) && (
+                      <span className="ml-2 bg-rose-500 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center ring-1 ring-gray-800">N</span>
+                    )}
                   </button>
                 ))}
               </div>
