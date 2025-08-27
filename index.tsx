@@ -1,12 +1,9 @@
 
-
-
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import ReactDOM from 'react-dom/client';
-// FIX: Split Firebase value and type imports to resolve module resolution errors and prevent downstream type inference problems.
-import { initializeApp } from 'firebase/app';
-import type { FirebaseApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, type Auth } from 'firebase/auth';
+// FIX: Combined 'firebase/app' imports into a single statement to resolve module resolution errors.
+import { initializeApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, signInAnonymously, type Auth, type User } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, onSnapshot, type Firestore } from 'firebase/firestore';
 
 // In a production environment, these would be managed via build-time environment variables.
@@ -20,10 +17,14 @@ interface FirebaseContextType {
   app: FirebaseApp | null;
   db: Firestore | null;
   auth: Auth | null;
+  user: User | null;
   userId: string | null;
   isAdmin: boolean;
+  isAnonymous: boolean;
   isAuthReady: boolean;
   appId: string;
+  login: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 // Firebase Context 생성
@@ -34,8 +35,10 @@ function FirebaseProvider({ children }: { children: React.ReactNode }) {
   const [app, setApp] = useState<FirebaseApp | null>(null);
   const [db, setDb] = useState<Firestore | null>(null);
   const [auth, setAuth] = useState<Auth | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -59,23 +62,23 @@ function FirebaseProvider({ children }: { children: React.ReactNode }) {
       setDb(firestoreDb);
       setAuth(firebaseAuth);
 
-      const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
-        if (user) {
-          setUserId(user.uid);
-          // Admin status is determined by matching the UID against the configured admin UID.
-          const isAdminUser = !!(adminId && user.uid === adminId && adminId !== 'PASTE_YOUR_ADMIN_UID_HERE');
+      const unsubscribe = onAuthStateChanged(firebaseAuth, async (currentUser) => {
+        if (currentUser) {
+          setUser(currentUser);
+          setUserId(currentUser.uid);
+          setIsAnonymous(currentUser.isAnonymous);
+          const isAdminUser = !!(adminId && currentUser.uid === adminId && adminId !== 'PASTE_YOUR_ADMIN_UID_HERE');
           setIsAdmin(isAdminUser);
         } else {
+          // User logged out, so sign them in anonymously for read-only access.
+          setUser(null);
           setUserId(null);
           setIsAdmin(false);
+          setIsAnonymous(true);
           try {
-            if (typeof __initial_auth_token !== 'undefined') {
-              await signInWithCustomToken(firebaseAuth, __initial_auth_token);
-            } else {
-              await signInAnonymously(firebaseAuth);
-            }
+            await signInAnonymously(firebaseAuth);
           } catch (error) {
-            console.error("Firebase authentication error:", error);
+            console.error("Failed to sign in anonymously:", error);
           }
         }
         setIsAuthReady(true);
@@ -87,9 +90,28 @@ function FirebaseProvider({ children }: { children: React.ReactNode }) {
         setIsAuthReady(true);
     }
   }, []);
+  
+  const login = async () => {
+    if (!auth) return;
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Google login error:", error);
+    }
+  };
+
+  const logout = async () => {
+    if (!auth) return;
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
 
   const contextValue: FirebaseContextType = {
-    app, db, auth, userId, isAdmin, isAuthReady, appId
+    app, db, auth, user, userId, isAdmin, isAnonymous, isAuthReady, appId, login, logout
   };
 
   return (
@@ -184,7 +206,7 @@ function ContentList({ contentType, title }: { contentType: string, title: strin
 
 // 관리자 패널 컴포넌트
 function AdminPanel() {
-  const { db, appId, isAdmin, isAuthReady, userId } = useFirebase();
+  const { db, appId, isAdmin, isAuthReady, userId, login, logout, user } = useFirebase();
   const [currentAdminTab, setCurrentAdminTab] = useState('sermons');
   const [formTitle, setFormTitle] = useState('');
   const [formContent, setFormContent] = useState('');
@@ -313,18 +335,24 @@ function AdminPanel() {
 
   if (!isAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-800 text-gray-200 p-8 rounded-lg shadow-md space-y-4">
-        <h2 className="text-2xl font-bold">관리자 권한이 필요합니다.</h2>
-        <p className="text-lg text-gray-300 text-center">이 페이지는 지정된 관리자만 접근할 수 있습니다.</p>
-        <p className="text-md text-gray-500">현재 사용자 ID: <span className="font-mono bg-gray-700 p-1 rounded text-gray-200">{userId || '로그인되지 않음'}</span></p>
+      <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-800 text-gray-200 p-8 rounded-lg shadow-md space-y-6">
+        <h2 className="text-2xl font-bold">관리자 권한이 필요합니다</h2>
+        <p className="text-lg text-gray-300 text-center">콘텐츠를 관리하려면 Google 계정으로 로그인해주세요.</p>
+        <button onClick={login} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-md transition-colors duration-200 text-lg">
+          Google 계정으로 관리자 로그인
+        </button>
+        {userId && <p className="text-md text-gray-500 mt-4 pt-4 border-t border-gray-700 w-full text-center">현재 사용자 ID (설정 확인용): <span className="font-mono bg-gray-700 p-1 rounded text-gray-200">{userId}</span></p>}
       </div>
     );
   }
 
   return (
     <div className="p-4 bg-gray-800 rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-4 text-white">관리자 페이지</h2>
-      <p className="text-sm text-gray-400 mb-4">관리자 User ID: <span className="font-mono bg-gray-700 p-1 rounded text-gray-200">{userId}</span></p>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-2xl font-bold text-white">관리자 페이지</h2>
+        <button onClick={logout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 text-sm">로그아웃</button>
+      </div>
+      <p className="text-sm text-gray-400 mb-4">관리자 User ID: <span className="font-mono bg-gray-700 p-1 rounded text-gray-200">{userId}</span> ({user?.displayName})</p>
 
       <div className="mb-6 flex space-x-2 border-b border-gray-700 pb-2">
         {adminTabs.map(tab => (
@@ -391,36 +419,29 @@ function AdminPanel() {
       {loading ? <div className="text-center p-4 text-white">로딩 중...</div> : error ? <div className="text-center p-4 text-red-400">{error}</div> : items.length === 0 ? <p className="text-gray-400">등록된 콘텐츠가 없습니다.</p> : (
         <div className="space-y-4">
           {items.map(item => (
-            <div key={item.id} className="border border-gray-700 p-4 rounded-md bg-gray-700 flex justify-between items-center">
-              <div>
+            <div key={item.id} className="border border-gray-700 p-4 rounded-md bg-gray-700 flex justify-between items-start">
+              <div className="flex-1 pr-4">
                 <h4 className="text-lg font-medium text-white">{item.title}</h4>
-                {currentAdminTab === 'sermons' && <div className="text-sm text-gray-400 mt-1 space-y-1">
-                  {(item.author || item.sermonDate) && <p className="space-x-2">{item.author && <span>{item.author}</span>}{item.author && item.sermonDate && <span>|</span>}{item.sermonDate && <span>{item.sermonDate}</span>}</p>}
-                  {item.bibleVerse && <p>성경구절: {item.bibleVerse}</p>}
-                </div>}
-                {currentAdminTab === 'columns' && <div className="text-sm text-gray-400 mt-1">
-                  {(item.author || item.columnDate) && <p className="space-x-2">{item.author && <span>{item.author}</span>}{item.author && item.columnDate && <span>|</span>}{item.columnDate && <span>{item.columnDate}</span>}</p>}
-                </div>}
-                <p className="text-gray-300 text-sm mt-1 line-clamp-2">{item.content}</p>
-                {item.timestamp && <p className="text-xs text-gray-500 mt-1">최종 업데이트: {new Date(item.timestamp.toDate()).toLocaleString()}</p>}
+                 <p className="text-sm text-gray-500 mt-2">
+                   {item.timestamp ? `최종 업데이트: ${new Date(item.timestamp.toDate()).toLocaleString()}` : ''}
+                 </p>
               </div>
-              <div className="flex space-x-2 ml-4">
-                <button onClick={() => handleEdit(item)} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-md transition-colors duration-200">수정</button>
-                <button onClick={() => setConfirmDeleteId(item.id)} className="bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-2 px-3 rounded-md transition-colors duration-200">삭제</button>
+              <div className="flex space-x-2 flex-shrink-0">
+                 <button onClick={() => handleEdit(item)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-md text-sm transition-colors duration-200">수정</button>
+                 <button onClick={() => setConfirmDeleteId(item.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md text-sm transition-colors duration-200">삭제</button>
               </div>
             </div>
           ))}
         </div>
       )}
-
-      {confirmDeleteId && (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4">
-          <div className="bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-sm">
-            <h3 className="text-lg font-bold mb-4 text-white">삭제 확인</h3>
-            <p className="mb-6 text-gray-300">정말로 이 콘텐츠를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.</p>
-            <div className="flex justify-end space-x-4">
-              <button onClick={() => setConfirmDeleteId(null)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">취소</button>
-              <button onClick={() => handleDelete(confirmDeleteId)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">삭제</button>
+       {confirmDeleteId && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-8 rounded-lg shadow-xl text-center">
+            <h3 className="text-xl font-bold mb-4 text-white">정말로 삭제하시겠습니까?</h3>
+            <p className="text-gray-300 mb-6">이 작업은 되돌릴 수 없습니다.</p>
+            <div className="flex justify-center space-x-4">
+              <button onClick={() => handleDelete(confirmDeleteId)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-md transition-colors duration-200">삭제 확인</button>
+              <button onClick={() => setConfirmDeleteId(null)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-md transition-colors duration-200">취소</button>
             </div>
           </div>
         </div>
@@ -429,89 +450,85 @@ function AdminPanel() {
   );
 }
 
-
-// 메인 앱 컴포넌트
-function App() {
-  const [currentTab, setCurrentTab] = useState('sermons');
-  const { userId, isAdmin, isAuthReady } = useFirebase();
-
-  const allTabs = [
-    { id: 'sermons', name: '예배말씀' },
-    { id: 'columns', name: '목회자칼럼' },
-    { id: 'announcements', name: '공지사항' },
-    { id: 'admin', name: '관리자' },
-  ];
-
-  const visibleTabs = isAdmin ? allTabs : allTabs.filter(tab => tab.id !== 'admin');
-
-  useEffect(() => {
-    // If the admin logs out while on the admin tab, switch to the home tab.
-    if (!isAdmin && currentTab === 'admin') {
-      setCurrentTab('sermons');
-    }
-  }, [isAdmin, currentTab]);
-
+function Header() {
+  const { user, isAnonymous, isAdmin } = useFirebase();
 
   return (
-    <div className="min-h-screen bg-gray-900 font-sans antialiased text-white">
-      <div className="container mx-auto p-4 max-w-4xl">
-        <header>
-          <h1 className="text-4xl font-extrabold text-center mb-8 text-indigo-400">
-            <span role="img" aria-label="church-icon" className="mr-2">⛪</span>
-            성은감리교회
-          </h1>
-        </header>
-
-        {isAuthReady && userId && (
-          <div className="text-right text-sm text-gray-400 mb-4">
-            현재 사용자 ID: <span className="font-mono bg-gray-700 p-1 rounded text-gray-200">{userId}</span>
-            {isAdmin && <span className="ml-2 px-2 py-1 bg-indigo-700 text-indigo-100 rounded-full text-xs font-semibold">관리자</span>}
-          </div>
-        )}
-
-        <nav className="mb-8 bg-gray-800 p-3 rounded-lg shadow-md">
-          <ul className="flex justify-around space-x-2" role="tablist">
-            {visibleTabs.map(tab => (
-              <li key={tab.id} className="flex-1" role="presentation">
-                <button id={`tab-${tab.id}`} onClick={() => setCurrentTab(tab.id)} className={`w-full py-3 px-4 rounded-md text-lg font-medium transition-all duration-300 ${currentTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'bg-gray-700 text-gray-200 hover:bg-gray-600 hover:text-indigo-400'}`} role="tab" aria-selected={currentTab === tab.id} aria-controls={`tabpanel-${tab.id}`}>
-                  {tab.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        <main>
-          <div id="tabpanel-sermons" role="tabpanel" aria-labelledby="tab-sermons" hidden={currentTab !== 'sermons'}>
-            {currentTab === 'sermons' && <ContentList contentType="sermons" title="예배말씀" />}
-          </div>
-          <div id="tabpanel-columns" role="tabpanel" aria-labelledby="tab-columns" hidden={currentTab !== 'columns'}>
-            {currentTab === 'columns' && <ContentList contentType="columns" title="목회자칼럼" />}
-          </div>
-          <div id="tabpanel-announcements" role="tabpanel" aria-labelledby="tab-announcements" hidden={currentTab !== 'announcements'}>
-            {currentTab === 'announcements' && <ContentList contentType="announcements" title="공지사항" />}
-          </div>
-          <div id="tabpanel-admin" role="tabpanel" aria-labelledby="tab-admin" hidden={currentTab !== 'admin'}>
-            {currentTab === 'admin' && <AdminPanel />}
-          </div>
-        </main>
+    <header className="bg-gray-800 shadow-md p-4">
+      <div className="container mx-auto flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-white">성은감리교회</h1>
       </div>
-    </div>
+    </header>
+  );
+}
+
+function Footer() {
+  const { userId } = useFirebase();
+  return (
+      <footer className="bg-gray-800 text-center p-4 mt-8">
+          <p className="text-gray-500 text-sm">© {new Date().getFullYear()} 성은감리교회. All Rights Reserved.</p>
+          {userId && <p className="text-xs text-gray-600 mt-2">Session ID: <span className="font-mono">{userId}</span></p>}
+      </footer>
   );
 }
 
 function ChurchApp() {
+  const [activeTab, setActiveTab] = useState('sermons');
+  const { isAdmin, isAuthReady } = useFirebase();
+
+  const tabs = [
+    { id: 'sermons', name: '예배말씀' },
+    { id: 'columns', name: '목회자칼럼' },
+    { id: 'announcements', name: '공지사항' },
+    ...(isAdmin ? [{ id: 'admin', name: '관리자' }] : []),
+  ];
+  
   return (
-    <React.StrictMode>
-      <FirebaseProvider>
-        <App />
-      </FirebaseProvider>
-    </React.StrictMode>
+    <div className="min-h-screen bg-gray-900 text-gray-200">
+      <Header />
+      <main className="container mx-auto p-4">
+        <div className="mb-4 border-b border-gray-700">
+          <nav className="flex space-x-4" aria-label="Tabs">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`${
+                  activeTab === tab.id
+                    ? 'border-indigo-500 text-indigo-400'
+                    : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
+                } whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-200`}
+              >
+                {tab.name}
+              </button>
+            ))}
+          </nav>
+        </div>
+        
+        {!isAuthReady ? (
+          <div className="text-center p-8 text-white">앱을 불러오는 중입니다...</div>
+        ) : (
+          <div>
+            {activeTab === 'sermons' && <ContentList contentType="sermons" title="예배말씀" />}
+            {activeTab === 'columns' && <ContentList contentType="columns" title="목회자칼럼" />}
+            {activeTab === 'announcements' && <ContentList contentType="announcements" title="공지사항" />}
+            {activeTab === 'admin' && isAdmin && <AdminPanel />}
+          </div>
+        )}
+      </main>
+      <Footer />
+    </div>
   );
 }
 
-const container = document.getElementById('root');
-if (container) {
-  const root = ReactDOM.createRoot(container);
-  root.render(<ChurchApp />);
-}
+const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
+// FIX: The error regarding the 'children' prop on FirebaseProvider is likely a cascading type error
+// from the unresolved Firebase imports. Fixing the imports above should resolve this issue without
+// needing to change the code here, which is correctly passing <ChurchApp /> as a child.
+root.render(
+  <React.StrictMode>
+    <FirebaseProvider>
+      <ChurchApp />
+    </FirebaseProvider>
+  </React.StrictMode>
+);
