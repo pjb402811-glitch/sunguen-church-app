@@ -23,7 +23,10 @@
     "firebase/": "https://aistudiocdn.com/firebase@^12.1.0/",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
     "react/": "https://aistudiocdn.com/react@^19.1.1/",
-    "react": "https://aistudiocdn.com/react@^19.1.1"
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "@firebase/auth": "https://aistudiocdn.com/@firebase/auth@^1.11.0",
+    "@firebase/firestore": "https://aistudiocdn.com/@firebase/firestore@^4.9.0",
+    "@firebase/app": "https://aistudiocdn.com/@firebase/app@^0.14.1"
   }
 }
 </script>
@@ -58,13 +61,17 @@
       // =_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=
       // ADMIN CONFIGURATION
       //
-      // To set an admin user, find the Firebase Authentication UID for the desired
-      // user in your Firebase Console (Authentication -> Users -> User UID).
-      // Paste that UID string below.
-      // Only this user will have access to the Admin panel.
+      // 1. In Firebase Console (Authentication -> Users), create a user with an
+      //    email and password. This will be your admin account.
+      // 2. Paste that user's email address into the `__admin_email` field below.
+      // 3. Paste that user's UID (User UID) into the `__admin_user_id` field below.
+      //
+      // The login form will only ask for a password. The email below will be used
+      // behind the scenes to log in securely.
       // =_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=_=
       window.__app_id = "seong-eun-methodist-church";
-      window.__admin_user_id = "b6Mmire0gnM98IqNVRoX6ohcC4Z2";
+      window.__admin_email = "Pjb402811@gmail.com"; // <-- PASTE YOUR ADMIN EMAIL HERE
+      window.__admin_user_id = "b6Mmire0gnM98IqNVRoX6ohcC4Z2"; // <-- PASTE YOUR ADMIN UID HERE
     </script>
     <script type="module" src="/index.tsx"></script>
   </body>

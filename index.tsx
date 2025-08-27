@@ -1,17 +1,18 @@
 
+
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import ReactDOM from 'react-dom/client';
-// FIX: Combined 'firebase/app' imports into a single statement to resolve module resolution errors.
-import { initializeApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, signInAnonymously, type Auth, type User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, onSnapshot, type Firestore } from 'firebase/firestore';
+// FIX: Updated Firebase imports from 'firebase/*' to '@firebase/*' to resolve module resolution errors. This is common if the project uses older v9 scoped packages.
+import { initializeApp, type FirebaseApp } from '@firebase/app';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, signInAnonymously, type Auth, type User } from '@firebase/auth';
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, onSnapshot, type Firestore } from '@firebase/firestore';
 
 // In a production environment, these would be managed via build-time environment variables.
 // For this context, we declare them as potentially available globals set in index.html.
 declare const __app_id: string;
 declare const __firebase_config: string;
-declare const __initial_auth_token: string;
 declare const __admin_user_id: string;
+declare const __admin_email: string;
 
 interface FirebaseContextType {
   app: FirebaseApp | null;
@@ -23,15 +24,19 @@ interface FirebaseContextType {
   isAnonymous: boolean;
   isAuthReady: boolean;
   appId: string;
-  login: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
 // Firebase Context 생성
 const FirebaseContext = createContext<FirebaseContextType | null>(null);
 
+// FIX: Refactored to use an explicit props type for FirebaseProvider to improve type safety and clarity.
+type FirebaseProviderProps = {
+  children: React.ReactNode;
+};
+
 // Firebase Provider 컴포넌트
-function FirebaseProvider({ children }: { children: React.ReactNode }) {
+function FirebaseProvider({ children }: FirebaseProviderProps) {
   const [app, setApp] = useState<FirebaseApp | null>(null);
   const [db, setDb] = useState<Firestore | null>(null);
   const [auth, setAuth] = useState<Auth | null>(null);
@@ -84,6 +89,13 @@ function FirebaseProvider({ children }: { children: React.ReactNode }) {
         setIsAuthReady(true);
       });
 
+      // Sign in anonymously on initial load if no user is present
+      if (!firebaseAuth.currentUser) {
+          signInAnonymously(firebaseAuth).catch(error => {
+              console.error("Initial anonymous sign-in failed:", error);
+          });
+      }
+
       return () => unsubscribe();
     } catch (e) {
         console.error("Error initializing Firebase:", e);
@@ -91,16 +103,6 @@ function FirebaseProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
   
-  const login = async () => {
-    if (!auth) return;
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Google login error:", error);
-    }
-  };
-
   const logout = async () => {
     if (!auth) return;
     try {
@@ -111,7 +113,7 @@ function FirebaseProvider({ children }: { children: React.ReactNode }) {
   };
 
   const contextValue: FirebaseContextType = {
-    app, db, auth, user, userId, isAdmin, isAnonymous, isAuthReady, appId, login, logout
+    app, db, auth, user, userId, isAdmin, isAnonymous, isAuthReady, appId, logout
   };
 
   return (
@@ -130,6 +132,56 @@ function useFirebase() {
   return context;
 }
 
+// App 컴포넌트
+function App() {
+  const [activeTab, setActiveTab] = useState('sermons');
+  const { isAdmin } = useFirebase();
+
+  const tabs = [
+    { id: 'sermons', name: '예배말씀' },
+    { id: 'columns', name: '목회자칼럼' },
+    { id: 'announcements', name: '공지사항' },
+    { id: 'admin', name: '관리자' },
+  ];
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
+      <header className="bg-gray-800 shadow-lg sticky top-0 z-10">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-white">성은감리교회</h1>
+          <nav className="hidden md:flex space-x-4">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`text-lg font-medium transition-colors duration-200 ${
+                  activeTab === tab.id ? 'text-indigo-400' : 'text-gray-300 hover:text-indigo-400'
+                }`}
+              >
+                {tab.name}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </header>
+      
+      <main className="flex-grow container mx-auto px-4 py-8">
+        {activeTab === 'sermons' && <ContentList contentType="sermons" title="예배말씀" />}
+        {activeTab === 'columns' && <ContentList contentType="columns" title="목회자칼럼" />}
+        {activeTab === 'announcements' && <ContentList contentType="announcements" title="공지사항" />}
+        {activeTab === 'admin' && <AdminPanel />}
+      </main>
+
+      <footer className="bg-gray-800 mt-auto">
+        <div className="container mx-auto px-4 py-4 text-center text-gray-400">
+          &copy; {new Date().getFullYear()} 성은감리교회. All rights reserved.
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+
 // 공통 콘텐츠 관리 함수
 const getContentCollectionPath = (appId: string, contentType: string) => `/artifacts/${appId}/public/data/${contentType}`;
 
@@ -142,6 +194,11 @@ function ContentList({ contentType, title }: { contentType: string, title: strin
 
   useEffect(() => {
     if (!db || !isAuthReady || !appId) {
+        if (!isAuthReady) {
+            // Still waiting for auth to be ready, don't show an error yet
+        } else {
+             setError("데이터베이스에 연결할 수 없습니다.");
+        }
         setLoading(false);
         return;
     };
@@ -157,9 +214,10 @@ function ContentList({ contentType, title }: { contentType: string, title: strin
       fetchedItems.sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
       setItems(fetchedItems);
       setLoading(false);
+      setError(null);
     }, (err) => {
       console.error("Error fetching content:", err);
-      setError("콘텐츠를 불러오는 데 실패했습니다.");
+      setError("콘텐츠를 불러오는 데 실패했습니다. Firebase 설정을 확인해주세요.");
       setLoading(false);
     });
 
@@ -206,7 +264,7 @@ function ContentList({ contentType, title }: { contentType: string, title: strin
 
 // 관리자 패널 컴포넌트
 function AdminPanel() {
-  const { db, appId, isAdmin, isAuthReady, userId, login, logout, user } = useFirebase();
+  const { db, auth, appId, isAdmin, isAuthReady, userId, logout, user } = useFirebase();
   const [currentAdminTab, setCurrentAdminTab] = useState('sermons');
   const [formTitle, setFormTitle] = useState('');
   const [formContent, setFormContent] = useState('');
@@ -221,12 +279,41 @@ function AdminPanel() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
 
   const adminTabs = [
     { id: 'sermons', name: '예배말씀 관리' },
     { id: 'columns', name: '목회자칼럼 관리' },
     { id: 'announcements', name: '공지사항 관리' },
   ];
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const adminEmail = typeof __admin_email !== 'undefined' ? __admin_email : '';
+
+    if (!adminEmail || adminEmail === 'admin@example.com' || adminEmail === '') {
+        setLoginError('관리자 이메일이 설정되지 않았습니다. index.html 파일을 확인해주세요.');
+        return;
+    }
+
+    if (!auth || !loginPassword) {
+      setLoginError('비밀번호를 입력해주세요.');
+      return;
+    }
+    try {
+      setLoginError('');
+      await signInWithEmailAndPassword(auth, adminEmail, loginPassword);
+    } catch (error: any) {
+      console.error("Admin login error:", error);
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        setLoginError('비밀번호가 올바르지 않습니다.');
+      } else {
+        setLoginError('로그인 중 오류가 발생했습니다. 다시 시도해주세요.');
+      }
+    }
+  };
+
 
   useEffect(() => {
     if (!db || !isAuthReady || !isAdmin || !appId) {
@@ -335,13 +422,27 @@ function AdminPanel() {
 
   if (!isAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-800 text-gray-200 p-8 rounded-lg shadow-md space-y-6">
-        <h2 className="text-2xl font-bold">관리자 권한이 필요합니다</h2>
-        <p className="text-lg text-gray-300 text-center">콘텐츠를 관리하려면 Google 계정으로 로그인해주세요.</p>
-        <button onClick={login} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-md transition-colors duration-200 text-lg">
-          Google 계정으로 관리자 로그인
-        </button>
-        {userId && <p className="text-md text-gray-500 mt-4 pt-4 border-t border-gray-700 w-full text-center">현재 사용자 ID (설정 확인용): <span className="font-mono bg-gray-700 p-1 rounded text-gray-200">{userId}</span></p>}
+      <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-800 text-gray-200 p-8 rounded-lg shadow-md">
+        <h2 className="text-2xl font-bold mb-4">관리자 로그인</h2>
+        <form onSubmit={handleAdminLogin} className="w-full max-w-sm space-y-4">
+            <div>
+              <label htmlFor="password"className="block text-gray-200 text-sm font-bold mb-2">비밀번호</label>
+              <input 
+                type="password" 
+                id="password" 
+                value={loginPassword} 
+                onChange={(e) => setLoginPassword(e.target.value)} 
+                className="shadow appearance-none border border-gray-600 rounded-md w-full py-2 px-3 bg-gray-700 text-white leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                placeholder="비밀번호를 입력하세요" 
+                required 
+              />
+            </div>
+            {loginError && <p className="text-red-400 text-sm text-center">{loginError}</p>}
+            <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-md transition-colors duration-200 text-lg">
+              로그인
+            </button>
+        </form>
+        {userId && <p className="text-md text-gray-500 mt-6 pt-4 border-t border-gray-700 w-full text-center">현재 사용자 ID (설정 확인용): <span className="font-mono bg-gray-700 p-1 rounded text-gray-200">{userId}</span></p>}
       </div>
     );
   }
@@ -352,7 +453,7 @@ function AdminPanel() {
         <h2 className="text-2xl font-bold text-white">관리자 페이지</h2>
         <button onClick={logout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 text-sm">로그아웃</button>
       </div>
-      <p className="text-sm text-gray-400 mb-4">관리자 User ID: <span className="font-mono bg-gray-700 p-1 rounded text-gray-200">{userId}</span> ({user?.displayName})</p>
+      <p className="text-sm text-gray-400 mb-4">관리자 User ID: <span className="font-mono bg-gray-700 p-1 rounded text-gray-200">{userId}</span> ({user?.email})</p>
 
       <div className="mb-6 flex space-x-2 border-b border-gray-700 pb-2">
         {adminTabs.map(tab => (
@@ -389,12 +490,12 @@ function AdminPanel() {
             </div>
             <div className="mb-4">
               <label htmlFor="bibleVerse" className="block text-gray-200 text-sm font-bold mb-2">성경구절</label>
-              <input type="text" id="bibleVerse" value={formBibleVerse} onChange={(e) => setFormBibleVerse(e.target.value)} className="shadow appearance-none border border-gray-600 rounded-md w-full py-2 px-3 bg-gray-800 text-white leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="예: 요한복음 3:16" />
+              <input type="text" id="bibleVerse" value={formBibleVerse} onChange={(e) => setFormBibleVerse(e.target.value)} className="shadow appearance-none border border-gray-600 rounded-md w-full py-2 px-3 bg-gray-800 text-white leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="성경구절을 입력하세요" />
             </div>
           </>
         )}
         {currentAdminTab === 'columns' && (
-          <>
+           <>
             <div className="mb-4">
               <label htmlFor="columnAuthor" className="block text-gray-200 text-sm font-bold mb-2">작성자</label>
               <input type="text" id="columnAuthor" value={formColumnAuthor} onChange={(e) => setFormColumnAuthor(e.target.value)} className="shadow appearance-none border border-gray-600 rounded-md w-full py-2 px-3 bg-gray-800 text-white leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="작성자를 입력하세요" />
@@ -407,41 +508,49 @@ function AdminPanel() {
         )}
         <div className="mb-4">
           <label htmlFor="content" className="block text-gray-200 text-sm font-bold mb-2">내용</label>
-          <textarea id="content" value={formContent} onChange={(e) => setFormContent(e.target.value)} rows={6} className="shadow appearance-none border border-gray-600 rounded-md w-full py-2 px-3 bg-gray-800 text-white leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="내용을 입력하세요"></textarea>
+          <textarea id="content" value={formContent} onChange={(e) => setFormContent(e.target.value)} className="shadow appearance-none border border-gray-600 rounded-md w-full py-2 px-3 bg-gray-800 text-white leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 h-40" placeholder="내용을 입력하세요"></textarea>
         </div>
-        <div className="flex space-x-4">
-          <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 transition-colors duration-200">{editingItemId ? '수정하기' : '등록하기'}</button>
-          {editingItemId && <button type="button" onClick={() => { setFormTitle(''); setFormContent(''); setFormAuthor(''); setFormSermonDate(new Date().toISOString().split('T')[0]); setFormBibleVerse(''); setFormColumnAuthor(''); setFormColumnDate(new Date().toISOString().split('T')[0]); setEditingItemId(null); setMessage(''); }} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-75 transition-colors duration-200">취소</button>}
+        <div className="flex items-center justify-between">
+          <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+            {editingItemId ? '수정하기' : '등록하기'}
+          </button>
+          {editingItemId && (
+            <button type="button" onClick={() => { setEditingItemId(null); setFormTitle(''); setFormContent(''); }} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+              취소
+            </button>
+          )}
         </div>
       </form>
+      
+      <div className="mt-8">
+        <h3 className="text-xl font-semibold mb-4 text-white">등록된 콘텐츠 목록</h3>
+        {loading ? <p className="text-gray-400">목록 로딩 중...</p> : error ? <p className="text-red-400">{error}</p> : items.length === 0 ? <p className="text-gray-400">등록된 콘텐츠가 없습니다.</p> : (
+          <ul className="space-y-2">
+            {items.map(item => (
+              <li key={item.id} className="flex items-center justify-between bg-gray-700 p-3 rounded-md">
+                <span className="text-white">{item.title}</span>
+                <div className="space-x-2">
+                  <button onClick={() => handleEdit(item)} className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-md">수정</button>
+                  <button onClick={() => setConfirmDeleteId(item.id)} className="text-sm bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded-md">삭제</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
-      <h3 className="text-xl font-semibold mb-4 text-white">기존 콘텐츠</h3>
-      {loading ? <div className="text-center p-4 text-white">로딩 중...</div> : error ? <div className="text-center p-4 text-red-400">{error}</div> : items.length === 0 ? <p className="text-gray-400">등록된 콘텐츠가 없습니다.</p> : (
-        <div className="space-y-4">
-          {items.map(item => (
-            <div key={item.id} className="border border-gray-700 p-4 rounded-md bg-gray-700 flex justify-between items-start">
-              <div className="flex-1 pr-4">
-                <h4 className="text-lg font-medium text-white">{item.title}</h4>
-                 <p className="text-sm text-gray-500 mt-2">
-                   {item.timestamp ? `최종 업데이트: ${new Date(item.timestamp.toDate()).toLocaleString()}` : ''}
-                 </p>
-              </div>
-              <div className="flex space-x-2 flex-shrink-0">
-                 <button onClick={() => handleEdit(item)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-md text-sm transition-colors duration-200">수정</button>
-                 <button onClick={() => setConfirmDeleteId(item.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md text-sm transition-colors duration-200">삭제</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-       {confirmDeleteId && (
+      {confirmDeleteId && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-8 rounded-lg shadow-xl text-center">
-            <h3 className="text-xl font-bold mb-4 text-white">정말로 삭제하시겠습니까?</h3>
+          <div className="bg-gray-800 p-6 rounded-lg shadow-xl text-center">
+            <h3 className="text-lg font-bold text-white mb-4">정말로 삭제하시겠습니까?</h3>
             <p className="text-gray-300 mb-6">이 작업은 되돌릴 수 없습니다.</p>
             <div className="flex justify-center space-x-4">
-              <button onClick={() => handleDelete(confirmDeleteId)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-md transition-colors duration-200">삭제 확인</button>
-              <button onClick={() => setConfirmDeleteId(null)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-md transition-colors duration-200">취소</button>
+              <button onClick={() => handleDelete(confirmDeleteId)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                삭제
+              </button>
+              <button onClick={() => setConfirmDeleteId(null)} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">
+                취소
+              </button>
             </div>
           </div>
         </div>
@@ -450,85 +559,16 @@ function AdminPanel() {
   );
 }
 
-function Header() {
-  const { user, isAnonymous, isAdmin } = useFirebase();
-
-  return (
-    <header className="bg-gray-800 shadow-md p-4">
-      <div className="container mx-auto flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-white">성은감리교회</h1>
-      </div>
-    </header>
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  const root = ReactDOM.createRoot(rootElement);
+  root.render(
+    <React.StrictMode>
+      <FirebaseProvider>
+        <App />
+      </FirebaseProvider>
+    </React.StrictMode>
   );
+} else {
+    console.error("Failed to find the root element");
 }
-
-function Footer() {
-  const { userId } = useFirebase();
-  return (
-      <footer className="bg-gray-800 text-center p-4 mt-8">
-          <p className="text-gray-500 text-sm">© {new Date().getFullYear()} 성은감리교회. All Rights Reserved.</p>
-          {userId && <p className="text-xs text-gray-600 mt-2">Session ID: <span className="font-mono">{userId}</span></p>}
-      </footer>
-  );
-}
-
-function ChurchApp() {
-  const [activeTab, setActiveTab] = useState('sermons');
-  const { isAdmin, isAuthReady } = useFirebase();
-
-  const tabs = [
-    { id: 'sermons', name: '예배말씀' },
-    { id: 'columns', name: '목회자칼럼' },
-    { id: 'announcements', name: '공지사항' },
-    ...(isAdmin ? [{ id: 'admin', name: '관리자' }] : []),
-  ];
-  
-  return (
-    <div className="min-h-screen bg-gray-900 text-gray-200">
-      <Header />
-      <main className="container mx-auto p-4">
-        <div className="mb-4 border-b border-gray-700">
-          <nav className="flex space-x-4" aria-label="Tabs">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`${
-                  activeTab === tab.id
-                    ? 'border-indigo-500 text-indigo-400'
-                    : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
-                } whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-200`}
-              >
-                {tab.name}
-              </button>
-            ))}
-          </nav>
-        </div>
-        
-        {!isAuthReady ? (
-          <div className="text-center p-8 text-white">앱을 불러오는 중입니다...</div>
-        ) : (
-          <div>
-            {activeTab === 'sermons' && <ContentList contentType="sermons" title="예배말씀" />}
-            {activeTab === 'columns' && <ContentList contentType="columns" title="목회자칼럼" />}
-            {activeTab === 'announcements' && <ContentList contentType="announcements" title="공지사항" />}
-            {activeTab === 'admin' && isAdmin && <AdminPanel />}
-          </div>
-        )}
-      </main>
-      <Footer />
-    </div>
-  );
-}
-
-const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
-// FIX: The error regarding the 'children' prop on FirebaseProvider is likely a cascading type error
-// from the unresolved Firebase imports. Fixing the imports above should resolve this issue without
-// needing to change the code here, which is correctly passing <ChurchApp /> as a child.
-root.render(
-  <React.StrictMode>
-    <FirebaseProvider>
-      <ChurchApp />
-    </FirebaseProvider>
-  </React.StrictMode>
-);
