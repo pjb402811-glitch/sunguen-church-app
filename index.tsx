@@ -129,6 +129,8 @@ interface Post {
   title: string;
   content: string;
   timestamp: any;
+  author?: string;
+  date?: string;
 }
 
 // Generic Content Display Component
@@ -164,6 +166,13 @@ function ContentDisplay({ collectionName, title }: { collectionName: string; tit
           {posts.map((post) => (
             <div key={post.id} className="bg-gray-800 p-4 rounded-lg shadow">
               <h3 className="text-xl font-semibold text-teal-400 mb-2">{post.title}</h3>
+              {(post.author || post.date) && (
+                <div className="text-xs text-gray-400 mb-2">
+                  {post.author && <span>작성자: {post.author}</span>}
+                  {post.author && post.date && <span className="mx-2">|</span>}
+                  {post.date && <span>날짜: {post.date}</span>}
+                </div>
+              )}
               <p className="text-gray-300 whitespace-pre-wrap">{post.content}</p>
             </div>
           ))}
@@ -242,9 +251,13 @@ function ContentManagement() {
   const [activeAdminTab, setActiveAdminTab] = useState('sermons');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [author, setAuthor] = useState('');
+  const [date, setDate] = useState('');
   const [posts, setPosts] = useState<Post[]>([]);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Post | null>(null);
+
+  const showExtraFields = activeAdminTab === 'sermons' || activeAdminTab === 'columns';
 
   useEffect(() => {
     if (!db) return;
@@ -256,22 +269,37 @@ function ContentManagement() {
     return () => unsubscribe();
   }, [db, activeAdminTab]);
 
+  const clearForm = () => {
+    setTitle('');
+    setContent('');
+    setAuthor('');
+    setDate('');
+    setEditingPost(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db || !title.trim() || !content.trim()) return;
 
+    const postData: { [key: string]: any } = {
+      title,
+      content,
+    };
+
+    if (showExtraFields) {
+      postData.author = author;
+      postData.date = date;
+    }
+
     try {
       if (editingPost) {
         const postRef = doc(db, activeAdminTab, editingPost.id);
-        await updateDoc(postRef, { title, content });
-        setEditingPost(null);
+        await updateDoc(postRef, postData);
       } else {
-        await addDoc(collection(db, activeAdminTab), {
-          title, content, timestamp: serverTimestamp(),
-        });
+        postData.timestamp = serverTimestamp();
+        await addDoc(collection(db, activeAdminTab), postData);
       }
-      setTitle('');
-      setContent('');
+      clearForm();
     } catch (error) {
       console.error("Error saving document: ", error);
     }
@@ -281,13 +309,13 @@ function ContentManagement() {
     setEditingPost(post);
     setTitle(post.title);
     setContent(post.content);
+    setAuthor(post.author || '');
+    setDate(post.date || '');
     window.scrollTo(0, 0);
   };
   
   const cancelEdit = () => {
-    setEditingPost(null);
-    setTitle('');
-    setContent('');
+    clearForm();
   };
 
   const deletePost = async (id: string) => {
@@ -330,6 +358,12 @@ function ContentManagement() {
         <h3 className="text-xl font-semibold mb-4">{editingPost ? '게시물 수정' : '새 게시물 작성'}</h3>
         <div className="space-y-4">
           <input type="text" placeholder="제목" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" required />
+          {showExtraFields && (
+            <>
+              <input type="text" placeholder="작성자" value={author} onChange={(e) => setAuthor(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
+            </>
+          )}
           <textarea placeholder="내용" value={content} onChange={(e) => setContent(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" rows={8} required />
         </div>
         <div className="mt-4 flex items-center space-x-2">
@@ -349,6 +383,13 @@ function ContentManagement() {
           <div key={post.id} className="bg-gray-800 p-4 rounded-lg flex justify-between items-start">
             <div>
               <h3 className="text-xl font-semibold text-teal-400 mb-2">{post.title}</h3>
+               {(post.author || post.date) && (
+                <div className="text-xs text-gray-400 mb-2">
+                  {post.author && <span>작성자: {post.author}</span>}
+                  {post.author && post.date && <span className="mx-2">|</span>}
+                  {post.date && <span>날짜: {post.date}</span>}
+                </div>
+              )}
               <p className="text-gray-300 whitespace-pre-wrap">{post.content}</p>
             </div>
             <div className="flex space-x-2 flex-shrink-0 ml-4">
