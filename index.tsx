@@ -27,7 +27,6 @@ interface FirebaseContextType {
 const FirebaseContext = createContext<FirebaseContextType | null>(null);
 
 type FirebaseProviderProps = {
-  // Fix: Made children optional to resolve TypeScript error at usage site.
   children?: React.ReactNode;
 };
 
@@ -174,216 +173,7 @@ function ContentDisplay({ collectionName, title }: { collectionName: string; tit
   );
 }
 
-
-// Admin Panel Component
-function AdminPanel() {
-  const { db, auth, logout, isAdmin } = useFirebase();
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [activeAdminTab, setActiveAdminTab] = useState('sermons');
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [editingPost, setEditingPost] = useState<Post | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<Post | null>(null);
-
-  useEffect(() => {
-    if (!db || !isAdmin) return;
-    const q = query(collection(db, activeAdminTab), orderBy('timestamp', 'desc'));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const postsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
-      setPosts(postsData);
-    });
-    return () => unsubscribe();
-  }, [db, isAdmin, activeAdminTab]);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!auth) return;
-    setError('');
-    try {
-      const adminEmail = typeof __admin_email !== 'undefined' ? __admin_email : '';
-      if (!adminEmail || adminEmail === 'PASTE_YOUR_ADMIN_EMAIL_HERE') {
-        setError('관리자 이메일이 설정되지 않았습니다.');
-        return;
-      }
-      await signInWithEmailAndPassword(auth, adminEmail, password);
-    } catch (err) {
-      setError('로그인에 실패했습니다. 비밀번호를 확인해주세요.');
-      console.error(err);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!db || !title.trim() || !content.trim()) return;
-
-    try {
-      if (editingPost) {
-        const postRef = doc(db, activeAdminTab, editingPost.id);
-        await updateDoc(postRef, {
-          title,
-          content,
-        });
-        setEditingPost(null);
-      } else {
-        await addDoc(collection(db, activeAdminTab), {
-          title,
-          content,
-          timestamp: serverTimestamp(),
-        });
-      }
-      setTitle('');
-      setContent('');
-    } catch (error) {
-      console.error("Error saving document: ", error);
-    }
-  };
-
-  const startEdit = (post: Post) => {
-    setEditingPost(post);
-    setTitle(post.title);
-    setContent(post.content);
-    window.scrollTo(0, 0);
-  };
-  
-  const cancelEdit = () => {
-      setEditingPost(null);
-      setTitle('');
-      setContent('');
-  };
-
-  const deletePost = async (id: string) => {
-    if (!db) return;
-    try {
-      await deleteDoc(doc(db, activeAdminTab, id));
-      setShowDeleteConfirm(null);
-    } catch (error) {
-      console.error("Error deleting document: ", error);
-    }
-  };
-
-  if (!isAdmin) {
-    return (
-      <div className="p-4 md:p-6 max-w-md mx-auto">
-        <h2 className="text-2xl font-bold mb-4 text-center">관리자 로그인</h2>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-400">비밀번호</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500"
-              required
-            />
-          </div>
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-          <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
-            로그인
-          </button>
-        </form>
-      </div>
-    );
-  }
-
-  const adminTabs = [
-    { id: 'sermons', label: '예배말씀' },
-    { id: 'columns', label: '목회칼럼' },
-    { id: 'announcements', label: '공지사항' },
-  ];
-
-  return (
-    <div className="p-4 md:p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">콘텐츠 관리</h2>
-        <button onClick={logout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
-          로그아웃
-        </button>
-      </div>
-      
-      <div className="mb-4 border-b border-gray-700">
-        <nav className="-mb-px flex space-x-4" aria-label="Tabs">
-          {adminTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => { setActiveAdminTab(tab.id); cancelEdit(); }}
-              className={`${
-                activeAdminTab === tab.id
-                  ? 'border-teal-400 text-teal-400'
-                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
-              } whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      <form onSubmit={handleSubmit} className="mb-8 bg-gray-800 p-4 rounded-lg">
-        <h3 className="text-xl font-semibold mb-4">{editingPost ? '게시물 수정' : '새 게시물 작성'}</h3>
-        <div className="space-y-4">
-          <input
-            type="text"
-            placeholder="제목"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500"
-            required
-          />
-          <textarea
-            placeholder="내용"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500"
-            rows={8}
-            required
-          />
-        </div>
-        <div className="mt-4 flex items-center space-x-2">
-            <button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
-              {editingPost ? '수정 완료' : '게시물 등록'}
-            </button>
-            {editingPost && (
-                <button type="button" onClick={cancelEdit} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
-                취소
-                </button>
-            )}
-        </div>
-      </form>
-
-      <div className="space-y-4">
-        {posts.map(post => (
-          <div key={post.id} className="bg-gray-800 p-4 rounded-lg flex justify-between items-start">
-            <div>
-              <h3 className="text-xl font-semibold text-teal-400 mb-2">{post.title}</h3>
-              <p className="text-gray-300 whitespace-pre-wrap">{post.content}</p>
-            </div>
-            <div className="flex space-x-2 flex-shrink-0 ml-4">
-              <button onClick={() => startEdit(post)} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">수정</button>
-              <button onClick={() => setShowDeleteConfirm(post)} className="bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">삭제</button>
-            </div>
-          </div>
-        ))}
-      </div>
-      
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 max-w-sm w-full mx-4">
-            <h3 className="text-lg font-bold text-white">삭제 확인</h3>
-            <p className="text-gray-300 mt-2 mb-4">"{showDeleteConfirm.title}" 게시물을 정말로 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.</p>
-            <div className="flex justify-end space-x-2">
-              <button onClick={() => setShowDeleteConfirm(null)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">취소</button>
-              <button onClick={() => deletePost(showDeleteConfirm.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md">삭제</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
+// Password Change Component (now used within AdminPanel)
 function PasswordChange() {
     const { auth, user } = useFirebase();
     const [currentPassword, setCurrentPassword] = useState('');
@@ -421,9 +211,9 @@ function PasswordChange() {
     };
     
     return (
-        <div className="p-4 md:p-6 max-w-md mx-auto">
-            <h2 className="text-2xl font-bold mb-6 text-center">비밀번호 변경</h2>
-            <form onSubmit={handleChangePassword} className="space-y-4">
+        <div className="p-4 md:p-6">
+            <h3 className="text-xl font-semibold mb-4">비밀번호 변경</h3>
+            <form onSubmit={handleChangePassword} className="space-y-4 max-w-md bg-gray-800 p-4 rounded-lg">
                 <div>
                     <label htmlFor="current-password"className="block text-sm font-medium text-gray-400">현재 비밀번호</label>
                     <input id="current-password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
@@ -446,17 +236,242 @@ function PasswordChange() {
     );
 }
 
+// Content Management Component (now used within AdminPanel)
+function ContentManagement() {
+  const { db } = useFirebase();
+  const [activeAdminTab, setActiveAdminTab] = useState('sermons');
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<Post | null>(null);
+
+  useEffect(() => {
+    if (!db) return;
+    const q = query(collection(db, activeAdminTab), orderBy('timestamp', 'desc'));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const postsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
+      setPosts(postsData);
+    });
+    return () => unsubscribe();
+  }, [db, activeAdminTab]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db || !title.trim() || !content.trim()) return;
+
+    try {
+      if (editingPost) {
+        const postRef = doc(db, activeAdminTab, editingPost.id);
+        await updateDoc(postRef, { title, content });
+        setEditingPost(null);
+      } else {
+        await addDoc(collection(db, activeAdminTab), {
+          title, content, timestamp: serverTimestamp(),
+        });
+      }
+      setTitle('');
+      setContent('');
+    } catch (error) {
+      console.error("Error saving document: ", error);
+    }
+  };
+
+  const startEdit = (post: Post) => {
+    setEditingPost(post);
+    setTitle(post.title);
+    setContent(post.content);
+    window.scrollTo(0, 0);
+  };
+  
+  const cancelEdit = () => {
+    setEditingPost(null);
+    setTitle('');
+    setContent('');
+  };
+
+  const deletePost = async (id: string) => {
+    if (!db) return;
+    try {
+      await deleteDoc(doc(db, activeAdminTab, id));
+      setShowDeleteConfirm(null);
+    } catch (error) {
+      console.error("Error deleting document: ", error);
+    }
+  };
+  
+  const contentTabs = [
+    { id: 'sermons', label: '예배말씀' },
+    { id: 'columns', label: '목회칼럼' },
+    { id: 'announcements', label: '공지사항' },
+  ];
+
+  return (
+    <div className="p-4 md:p-6">
+       <div className="mb-4 border-b border-gray-700">
+        <nav className="-mb-px flex space-x-4" aria-label="Tabs">
+          {contentTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => { setActiveAdminTab(tab.id); cancelEdit(); }}
+              className={`${
+                activeAdminTab === tab.id
+                  ? 'border-teal-400 text-teal-400'
+                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
+              } whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      <form onSubmit={handleSubmit} className="mb-8 bg-gray-800 p-4 rounded-lg">
+        <h3 className="text-xl font-semibold mb-4">{editingPost ? '게시물 수정' : '새 게시물 작성'}</h3>
+        <div className="space-y-4">
+          <input type="text" placeholder="제목" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" required />
+          <textarea placeholder="내용" value={content} onChange={(e) => setContent(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" rows={8} required />
+        </div>
+        <div className="mt-4 flex items-center space-x-2">
+          <button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
+            {editingPost ? '수정 완료' : '게시물 등록'}
+          </button>
+          {editingPost && (
+            <button type="button" onClick={cancelEdit} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
+              취소
+            </button>
+          )}
+        </div>
+      </form>
+
+      <div className="space-y-4">
+        {posts.map(post => (
+          <div key={post.id} className="bg-gray-800 p-4 rounded-lg flex justify-between items-start">
+            <div>
+              <h3 className="text-xl font-semibold text-teal-400 mb-2">{post.title}</h3>
+              <p className="text-gray-300 whitespace-pre-wrap">{post.content}</p>
+            </div>
+            <div className="flex space-x-2 flex-shrink-0 ml-4">
+              <button onClick={() => startEdit(post)} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">수정</button>
+              <button onClick={() => setShowDeleteConfirm(post)} className="bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">삭제</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 max-w-sm w-full mx-4">
+            <h3 className="text-lg font-bold text-white">삭제 확인</h3>
+            <p className="text-gray-300 mt-2 mb-4">"{showDeleteConfirm.title}" 게시물을 정말로 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.</p>
+            <div className="flex justify-end space-x-2">
+              <button onClick={() => setShowDeleteConfirm(null)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">취소</button>
+              <button onClick={() => deletePost(showDeleteConfirm.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md">삭제</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// Admin Panel Component
+function AdminPanel() {
+  const { auth, logout, isAdmin } = useFirebase();
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [adminSubTab, setAdminSubTab] = useState('content');
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auth) return;
+    setError('');
+    try {
+      const adminEmail = typeof __admin_email !== 'undefined' ? __admin_email : '';
+      if (!adminEmail || adminEmail === 'PASTE_YOUR_ADMIN_EMAIL_HERE') {
+        setError('관리자 이메일이 설정되지 않았습니다.');
+        return;
+      }
+      await signInWithEmailAndPassword(auth, adminEmail, password);
+    } catch (err) {
+      setError('로그인에 실패했습니다. 비밀번호를 확인해주세요.');
+      console.error(err);
+    }
+  };
+
+  if (!isAdmin) {
+    return (
+      <div className="p-4 md:p-6 max-w-md mx-auto">
+        <h2 className="text-2xl font-bold mb-4 text-center">관리자 로그인</h2>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-400">비밀번호</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500"
+              required
+            />
+          </div>
+          {error && <p className="text-red-400 text-sm">{error}</p>}
+          <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
+            로그인
+          </button>
+        </form>
+      </div>
+    );
+  }
+  
+  const adminPageTabs = [
+      { id: 'content', label: '콘텐츠 관리' },
+      { id: 'password', label: '비밀번호 변경' },
+  ];
+
+  return (
+    <div className="p-4 md:p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold">관리자 페이지</h2>
+        <button onClick={logout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
+          로그아웃
+        </button>
+      </div>
+      
+       <div className="mb-4 border-b border-gray-700">
+        <nav className="-mb-px flex space-x-4" aria-label="Tabs">
+          {adminPageTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setAdminSubTab(tab.id)}
+              className={`${
+                adminSubTab === tab.id
+                  ? 'border-teal-400 text-teal-400'
+                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
+              } whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {adminSubTab === 'content' && <ContentManagement />}
+      {adminSubTab === 'password' && <PasswordChange />}
+    </div>
+  );
+}
 
 // App Component
 function App() {
   const [activeTab, setActiveTab] = useState('sermons');
-  const { isAuthReady, isAdmin } = useFirebase();
+  const { isAuthReady } = useFirebase();
 
   const tabColorClasses: { [key: string]: string } = {
     sermons: 'bg-sky-600 hover:bg-sky-500',
     columns: 'bg-emerald-600 hover:bg-emerald-500',
     announcements: 'bg-orange-600 hover:bg-orange-500',
-    passwordChange: 'bg-indigo-600 hover:bg-indigo-500',
     admin: 'bg-rose-600 hover:bg-rose-500',
   };
 
@@ -474,14 +489,6 @@ function App() {
     { id: 'announcements', label: '공지사항' },
     { id: 'admin', label: '관리자' },
   ];
-  
-  const adminTabs = [
-    ...tabs.filter(t => t.id !== 'admin'),
-    { id: 'passwordChange', label: '비밀번호 변경' },
-    { id: 'admin', label: '관리자' },
-  ];
-
-  const currentTabs = isAdmin ? adminTabs : tabs;
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-900">
@@ -496,8 +503,8 @@ function App() {
         <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
           <div className="relative flex items-center justify-center h-16">
             <div className="flex items-center justify-center sm:items-stretch sm:justify-start">
-              <div className="flex space-x-4">
-                {currentTabs.map((tab) => (
+              <div className="flex space-x-2">
+                {tabs.map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
@@ -507,7 +514,7 @@ function App() {
                       activeTab === tab.id
                         ? 'text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-white'
                         : 'text-gray-200 opacity-80 hover:opacity-100'
-                    } px-6 py-4 rounded-md text-lg font-medium transition-all duration-200`}
+                    } px-3 py-2 rounded-md text-sm font-medium transition-all duration-200`}
                     aria-current={activeTab === tab.id ? 'page' : undefined}
                   >
                     {tab.label}
@@ -524,7 +531,6 @@ function App() {
         {activeTab === 'columns' && <ContentDisplay collectionName="columns" title="목회칼럼" />}
         {activeTab === 'announcements' && <ContentDisplay collectionName="announcements" title="공지사항" />}
         {activeTab === 'admin' && <AdminPanel />}
-        {isAdmin && activeTab === 'passwordChange' && <PasswordChange />}
       </main>
     </div>
   );
