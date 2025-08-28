@@ -105,31 +105,37 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
       const unsubscribers = contentCollections.map(collectionName => {
         const q = query(collection(firestoreDb, collectionName), orderBy('timestamp', 'desc'), limit(1));
         return onSnapshot(q, (querySnapshot) => {
-          if (!querySnapshot.empty) {
+          try {
+            if (querySnapshot.empty) {
+                setNewContent(prev => ({ ...prev, [collectionName]: false }));
+                return;
+            }
+
             const latestDoc = querySnapshot.docs[0];
             const postData = latestDoc.data();
 
-            // This is the definitive fix for the race condition. We will only proceed if two conditions are met:
-            // 1. The data is not a local-only, optimistic update (`hasPendingWrites` is false).
-            // 2. The `timestamp` field exists and is a proper Firestore Timestamp object (checked via `?.toMillis`).
-            // This ensures we only compare against the final, server-confirmed timestamp.
-            if (latestDoc.metadata.hasPendingWrites || !postData.timestamp?.toMillis) {
-                return; // Wait for the server-confirmed data.
+            // More robust guard against missing data or pending server writes to prevent crashes.
+            if (!postData || latestDoc.metadata.hasPendingWrites || !postData.timestamp || typeof postData.timestamp.toMillis !== 'function') {
+                return; // Wait for final server-confirmed data.
             }
 
             const latestTimestamp = postData.timestamp.toMillis();
+            
+            if (isNaN(latestTimestamp)) return; // Guard against invalid timestamp
 
             setLatestTimestamps(prev => ({ ...prev, [collectionName]: latestTimestamp }));
-            const seenTimestamp = localStorage.getItem(`seenTimestamp_${collectionName}`);
+            const seenTimestampRaw = localStorage.getItem(`seenTimestamp_${collectionName}`);
+            const seenTimestamp = seenTimestampRaw ? parseInt(seenTimestampRaw, 10) : 0;
 
-            if (!seenTimestamp || latestTimestamp > parseInt(seenTimestamp, 10)) {
+            if (latestTimestamp > seenTimestamp) {
                 setNewContent(prev => ({ ...prev, [collectionName]: true }));
             } else {
                 setNewContent(prev => ({ ...prev, [collectionName]: false }));
             }
-          } else {
-             // No posts in collection, so no new content.
-             setNewContent(prev => ({ ...prev, [collectionName]: false }));
+          } catch (error) {
+              console.error(`Error processing snapshot for ${collectionName}:`, error);
+              // Prevent crash by assuming no new content on error.
+              setNewContent(prev => ({ ...prev, [collectionName]: false }));
           }
         });
       });
@@ -388,9 +394,10 @@ function ContentManagement() {
         postData.timestamp = serverTimestamp();
         await addDoc(collection(db, activeAdminTab), postData);
       }
-      clearForm();
     } catch (error) {
       console.error("Error saving document: ", error);
+    } finally {
+      clearForm();
     }
   };
 
@@ -410,9 +417,16 @@ function ContentManagement() {
 
   const deletePost = async (id: string) => {
     if (!db) return;
+
+    // Close the modal immediately for better UX
+    setShowDeleteConfirm(null);
+    
     try {
       await deleteDoc(doc(db, activeAdminTab, id));
-      setShowDeleteConfirm(null);
+      // If the deleted post was the one being edited, clear the form
+      if (editingPost && editingPost.id === id) {
+        clearForm();
+      }
     } catch (error) {
       console.error("Error deleting document: ", error);
     }
@@ -477,35 +491,35 @@ function ContentManagement() {
 
       <div className="space-y-4">
         {posts.map(post => (
-          <div key={post.id} className="bg-gray-800 rounded-lg shadow overflow-hidden transition-all duration-300">
-             <button onClick={() => toggleAdminExpand(post.id)} className="w-full text-left p-4 focus:outline-none focus:bg-gray-700/50">
-                <div className="flex justify-between items-center w-full">
-                    <div>
-                        <h3 className="text-xl font-semibold text-teal-400">{post.title}</h3>
-                        {(post.author || post.date) && (
-                            <div className="text-sm text-gray-400 mt-1">
-                            {post.author && <span>{post.author}</span>}
-                            {post.author && post.date && <span className="mx-2">|</span>}
-                            {post.date && <span>{post.date}</span>}
-                            </div>
-                        )}
-                    </div>
-                    <svg className={`w-6 h-6 text-gray-400 transition-transform duration-300 transform flex-shrink-0 ml-4 ${expandedAdminPostId === post.id ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                </div>
-             </button>
+          <div key={post.id} className="bg-gray-800 rounded-lg shadow overflow-hidden">
+            <div className="flex justify-between items-center p-4">
+              <button onClick={() => toggleAdminExpand(post.id)} className="flex-grow text-left flex justify-between items-center focus:outline-none">
+                  <div>
+                      <h3 className="text-xl font-semibold text-teal-400">{post.title}</h3>
+                      {(post.author || post.date) && (
+                          <div className="text-sm text-gray-400 mt-1">
+                          {post.author && <span>{post.author}</span>}
+                          {post.author && post.date && <span className="mx-2">|</span>}
+                          {post.date && <span>{post.date}</span>}
+                          </div>
+                      )}
+                  </div>
+                  <svg className={`w-6 h-6 text-gray-400 transition-transform duration-300 transform flex-shrink-0 ml-4 ${expandedAdminPostId === post.id ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+              </button>
+              <div className="flex space-x-2 flex-shrink-0 ml-4">
+                  <button onClick={() => startEdit(post)} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">수정</button>
+                  <button onClick={() => setShowDeleteConfirm(post)} className="bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">삭제</button>
+              </div>
+            </div>
             {expandedAdminPostId === post.id && (
-                <div className="p-4 pt-0">
+                <div className="px-4 pb-4">
                     <div className="border-t border-gray-700 pt-4">
                         {showSermonFields && post.bibleVerse && (
                             <p className="text-sm text-yellow-300 italic mb-2">{post.bibleVerse}</p>
                         )}
-                        <p className="text-gray-300 whitespace-pre-wrap mb-4">{post.content}</p>
-                        <div className="flex space-x-2 flex-shrink-0">
-                            <button onClick={() => startEdit(post)} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">수정</button>
-                            <button onClick={() => setShowDeleteConfirm(post)} className="bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">삭제</button>
-                        </div>
+                        <p className="text-gray-300 whitespace-pre-wrap">{post.content}</p>
                     </div>
                 </div>
             )}
@@ -675,7 +689,7 @@ function App() {
                       activeTab === tab.id
                         ? 'text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-white'
                         : 'text-gray-200 opacity-80 hover:opacity-100'
-                    } relative px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center`}
+                    } relative px-3 py-4 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center`}
                     aria-current={activeTab === tab.id ? 'page' : undefined}
                   >
                     <span>{tab.label}</span>
