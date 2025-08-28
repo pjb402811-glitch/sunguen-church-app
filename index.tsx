@@ -462,7 +462,7 @@ function ContentManagement() {
         </nav>
       </div>
 
-      <form onSubmit={handleSubmit} className="mb-8 bg-gray-800 py-4 px-1 rounded-lg">
+      <form onSubmit={handleSubmit} className="mb-8 bg-gray-800 py-4 px-1 rounded-lg max-w-2xl mx-auto">
         <h3 className="text-xl font-semibold mb-4 px-3">
           {editingPost ? '게시물 수정' : '새 게시물 작성'}
         </h3>
