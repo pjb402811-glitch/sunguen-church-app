@@ -21,6 +21,7 @@ interface FirebaseContextType {
   isAnonymous: boolean;
   isAuthReady: boolean;
   appId: string;
+  isOnline: boolean;
   logout: () => Promise<void>;
   newContent: { [key: string]: boolean };
   markAsRead: (collectionName: string) => void;
@@ -41,10 +42,24 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [newContent, setNewContent] = useState<{ [key: string]: boolean }>({});
   const [latestTimestamps, setLatestTimestamps] = useState<{ [key: string]: number }>({});
 
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+  
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -91,18 +106,30 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
         const q = query(collection(firestoreDb, collectionName), orderBy('timestamp', 'desc'), limit(1));
         return onSnapshot(q, (querySnapshot) => {
           if (!querySnapshot.empty) {
-            const latestPost = querySnapshot.docs[0].data();
-            const latestTimestamp = latestPost.timestamp?.toMillis();
-             if (latestTimestamp) {
-              setLatestTimestamps(prev => ({ ...prev, [collectionName]: latestTimestamp }));
+            const latestDoc = querySnapshot.docs[0];
+            const postData = latestDoc.data();
+
+            // This is the definitive fix for the race condition. We will only proceed if two conditions are met:
+            // 1. The data is not a local-only, optimistic update (`hasPendingWrites` is false).
+            // 2. The `timestamp` field exists and is a proper Firestore Timestamp object (checked via `?.toMillis`).
+            // This ensures we only compare against the final, server-confirmed timestamp.
+            if (latestDoc.metadata.hasPendingWrites || !postData.timestamp?.toMillis) {
+                return; // Wait for the server-confirmed data.
             }
+
+            const latestTimestamp = postData.timestamp.toMillis();
+
+            setLatestTimestamps(prev => ({ ...prev, [collectionName]: latestTimestamp }));
             const seenTimestamp = localStorage.getItem(`seenTimestamp_${collectionName}`);
-            
-            if (latestTimestamp && (!seenTimestamp || latestTimestamp > parseInt(seenTimestamp))) {
-              setNewContent(prev => ({ ...prev, [collectionName]: true }));
+
+            if (!seenTimestamp || latestTimestamp > parseInt(seenTimestamp, 10)) {
+                setNewContent(prev => ({ ...prev, [collectionName]: true }));
             } else {
-              setNewContent(prev => ({ ...prev, [collectionName]: false }));
+                setNewContent(prev => ({ ...prev, [collectionName]: false }));
             }
+          } else {
+             // No posts in collection, so no new content.
+             setNewContent(prev => ({ ...prev, [collectionName]: false }));
           }
         });
       });
@@ -143,7 +170,7 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
   };
 
   const contextValue: FirebaseContextType = {
-    app, db, auth, user, userId, isAdmin, isAnonymous, isAuthReady, appId, logout, newContent, markAsRead
+    app, db, auth, user, userId, isAdmin, isAnonymous, isAuthReady, appId, isOnline, logout, newContent, markAsRead
   };
 
   return (
@@ -593,7 +620,7 @@ function AdminPanel() {
 // App Component
 function App() {
   const [activeTab, setActiveTab] = useState('sermons');
-  const { isAuthReady, newContent, markAsRead } = useFirebase();
+  const { isAuthReady, newContent, markAsRead, isOnline } = useFirebase();
 
   const handleTabClick = (tabId: string) => {
     setActiveTab(tabId);
@@ -648,12 +675,12 @@ function App() {
                       activeTab === tab.id
                         ? 'text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-white'
                         : 'text-gray-200 opacity-80 hover:opacity-100'
-                    } px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center`}
+                    } relative px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center`}
                     aria-current={activeTab === tab.id ? 'page' : undefined}
                   >
                     <span>{tab.label}</span>
                     {newContent[tab.id] && ['sermons', 'columns', 'announcements'].includes(tab.id) && (
-                      <span className="ml-2 bg-rose-500 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center ring-1 ring-gray-800">N</span>
+                      <span className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-rose-500 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center ring-1 ring-white/50">N</span>
                     )}
                   </button>
                 ))}
@@ -669,6 +696,13 @@ function App() {
         {activeTab === 'announcements' && <ContentDisplay collectionName="announcements" title="공지사항" />}
         {activeTab === 'admin' && <AdminPanel />}
       </main>
+
+      {!isOnline && (
+        <div className="fixed bottom-4 right-4 bg-red-600 text-white text-sm font-bold py-2 px-4 rounded-lg shadow-lg z-50 flex items-center space-x-2 animate-pulse" role="alert" aria-live="assertive">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m-12.728 0a9 9 0 010-12.728m12.728 0L5.636 18.364m0-12.728L18.364 18.364" /></svg>
+            <span>연결이 끊겼습니다. 오프라인 모드입니다.</span>
+        </div>
+      )}
     </div>
   );
 }
