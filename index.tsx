@@ -462,8 +462,10 @@ function ContentManagement() {
         </nav>
       </div>
 
-      <form onSubmit={handleSubmit} className="mb-8 bg-gray-800 p-4 rounded-lg">
-        <h3 className="text-xl font-semibold mb-4">{editingPost ? '게시물 수정' : '새 게시물 작성'}</h3>
+      <form onSubmit={handleSubmit} className="mb-8 bg-gray-800 py-4 px-1 rounded-lg">
+        <h3 className="text-xl font-semibold mb-4 px-3">
+          {editingPost ? '게시물 수정' : '새 게시물 작성'}
+        </h3>
         <div className="space-y-4">
           <input type="text" placeholder="제목" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" required />
           {showSermonFields && (
@@ -477,7 +479,7 @@ function ContentManagement() {
           )}
           <textarea placeholder="내용" value={content} onChange={(e) => setContent(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" rows={8} required />
         </div>
-        <div className="mt-4 flex items-center space-x-2">
+        <div className="mt-4 flex items-center space-x-2 px-3">
           <button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
             {editingPost ? '수정 완료' : '게시물 등록'}
           </button>
