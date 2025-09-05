@@ -101,7 +101,7 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
         setIsAuthReady(true);
       });
       
-      const contentCollections = ['sermons', 'columns', 'announcements'];
+      const contentCollections = ['sermons', 'columns', 'announcements', 'prayers'];
       const unsubscribers = contentCollections.map(collectionName => {
         const q = query(collection(firestoreDb, collectionName), orderBy('timestamp', 'desc'), limit(1));
         return onSnapshot(q, (querySnapshot) => {
@@ -440,6 +440,7 @@ function ContentManagement() {
     { id: 'sermons', label: '예배말씀' },
     { id: 'columns', label: '목회자칼럼' },
     { id: 'announcements', label: '공지사항' },
+    { id: 'prayers', label: '매일기도문' },
   ];
 
   return (
@@ -640,7 +641,7 @@ function App() {
 
   const handleTabClick = (tabId: string) => {
     setActiveTab(tabId);
-    if (['sermons', 'columns', 'announcements'].includes(tabId)) {
+    if (['sermons', 'columns', 'announcements', 'prayers'].includes(tabId)) {
         markAsRead(tabId);
     }
   };
@@ -649,6 +650,7 @@ function App() {
     sermons: 'bg-sky-600 hover:bg-sky-500',
     columns: 'bg-emerald-600 hover:bg-emerald-500',
     announcements: 'bg-orange-600 hover:bg-orange-500',
+    prayers: 'bg-indigo-600 hover:bg-indigo-500',
     admin: 'bg-rose-600 hover:bg-rose-500',
   };
 
@@ -664,6 +666,7 @@ function App() {
     { id: 'sermons', label: '예배말씀' },
     { id: 'columns', label: '목회자칼럼' },
     { id: 'announcements', label: '공지사항' },
+    { id: 'prayers', label: '매일기도문' },
     { id: 'admin', label: '관리자' },
   ];
 
@@ -695,7 +698,7 @@ function App() {
                     aria-current={activeTab === tab.id ? 'page' : undefined}
                   >
                     <span>{tab.label}</span>
-                    {newContent[tab.id] && ['sermons', 'columns', 'announcements'].includes(tab.id) && (
+                    {newContent[tab.id] && ['sermons', 'columns', 'announcements', 'prayers'].includes(tab.id) && (
                       <span className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-rose-500 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center ring-1 ring-white/50">N</span>
                     )}
                   </button>
@@ -710,6 +713,7 @@ function App() {
         {activeTab === 'sermons' && <ContentDisplay collectionName="sermons" title="예배말씀" />}
         {activeTab === 'columns' && <ContentDisplay collectionName="columns" title="목회자칼럼" />}
         {activeTab === 'announcements' && <ContentDisplay collectionName="announcements" title="공지사항" />}
+        {activeTab === 'prayers' && <ContentDisplay collectionName="prayers" title="매일기도문" />}
         {activeTab === 'admin' && <AdminPanel />}
       </main>
 
