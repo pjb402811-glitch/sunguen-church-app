@@ -1,15 +1,17 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
-import ReactDOM from 'react-dom/client';
+import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
+import { createRoot } from 'react-dom/client';
 import { initializeApp, type FirebaseApp } from '@firebase/app';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, signInAnonymously, updatePassword, reauthenticateWithCredential, EmailAuthProvider, type Auth, type User } from '@firebase/auth';
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, onSnapshot, orderBy, limit, type Firestore } from '@firebase/firestore';
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, onSnapshot, orderBy, limit, writeBatch, type Firestore } from '@firebase/firestore';
+import { GoogleGenAI, Type } from "@google/genai";
 
-// In a production environment, these would be managed via build-time environment variables.
-// For this context, we declare them as potentially available globals set in index.html.
+// Global variables declaration
 declare const __app_id: string;
 declare const __firebase_config: string;
 declare const __admin_user_id: string;
 declare const __admin_email: string;
+
+// --- Firebase Context & Provider ---
 
 interface FirebaseContextType {
   app: FirebaseApp | null;
@@ -29,11 +31,7 @@ interface FirebaseContextType {
 
 const FirebaseContext = createContext<FirebaseContextType | null>(null);
 
-type FirebaseProviderProps = {
-  children?: React.ReactNode;
-};
-
-function FirebaseProvider({ children }: FirebaseProviderProps) {
+function FirebaseProvider({ children }: { children?: React.ReactNode }) {
   const [app, setApp] = useState<FirebaseApp | null>(null);
   const [db, setDb] = useState<Firestore | null>(null);
   const [auth, setAuth] = useState<Auth | null>(null);
@@ -114,14 +112,13 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
             const latestDoc = querySnapshot.docs[0];
             const postData = latestDoc.data();
 
-            // More robust guard against missing data or pending server writes to prevent crashes.
             if (!postData || latestDoc.metadata.hasPendingWrites || !postData.timestamp || typeof postData.timestamp.toMillis !== 'function') {
-                return; // Wait for final server-confirmed data.
+                return; 
             }
 
             const latestTimestamp = postData.timestamp.toMillis();
             
-            if (isNaN(latestTimestamp)) return; // Guard against invalid timestamp
+            if (isNaN(latestTimestamp)) return;
 
             setLatestTimestamps(prev => ({ ...prev, [collectionName]: latestTimestamp }));
             const seenTimestampRaw = localStorage.getItem(`seenTimestamp_${collectionName}`);
@@ -134,7 +131,6 @@ function FirebaseProvider({ children }: FirebaseProviderProps) {
             }
           } catch (error) {
               console.error(`Error processing snapshot for ${collectionName}:`, error);
-              // Prevent crash by assuming no new content on error.
               setNewContent(prev => ({ ...prev, [collectionName]: false }));
           }
         });
@@ -194,7 +190,8 @@ function useFirebase() {
   return context;
 }
 
-// Data types
+// --- Data Types ---
+
 interface Post {
   id: string;
   title: string;
@@ -204,6 +201,8 @@ interface Post {
   date?: string;
   bibleVerse?: string;
 }
+
+// --- Components ---
 
 // Generic Content Display Component
 function ContentDisplay({ collectionName, title }: { collectionName: string; title: string }) {
@@ -240,37 +239,54 @@ function ContentDisplay({ collectionName, title }: { collectionName: string; tit
         <p className="text-gray-400">아직 등록된 게시물이 없습니다.</p>
       ) : (
         <div className="space-y-4">
-          {posts.map((post) => (
-            <div key={post.id} className="bg-gray-800 rounded-lg shadow overflow-hidden transition-all duration-300">
-              <button onClick={() => toggleExpand(post.id)} className="w-full text-left p-4 focus:outline-none focus:bg-gray-700/50">
-                <h3 className="text-xl font-semibold text-teal-400 mb-2">{post.title}</h3>
-                {collectionName === 'sermons' && post.bibleVerse && (
-                  <p className="text-sm text-yellow-300 italic border-l-4 border-yellow-300 pl-3 mb-2">
-                    {post.bibleVerse}
-                  </p>
+          {posts.map((post) => {
+            const isAnnouncement = collectionName === 'announcements';
+            let displayTitle = post.title;
+            // Clean title for announcements (remove leading "1.", "1)", etc.)
+            if (isAnnouncement) {
+                // Remove 1. or 1) patterns
+                displayTitle = displayTitle.replace(/^[\d]+[\.\)]\s*/, '');
+                
+                // Hide date if it is 'null' string or falsy
+                if (post.date && post.date !== 'null') {
+                    // Standardize (주) to (주일)
+                    const formattedDate = post.date.replace(/\(주\)/g, '(주일)');
+                    displayTitle = `${displayTitle} (${formattedDate})`;
+                }
+            }
+
+            return (
+                <div key={post.id} className="bg-gray-800 rounded-lg shadow overflow-hidden transition-all duration-300">
+                <button onClick={() => toggleExpand(post.id)} className="w-full text-left p-4 focus:outline-none focus:bg-gray-700/50">
+                    <h3 className="text-xl font-semibold text-teal-400 mb-2">{displayTitle}</h3>
+                    {collectionName === 'sermons' && post.bibleVerse && (
+                    <p className="text-sm text-yellow-300 italic border-l-4 border-yellow-300 pl-3 mb-2">
+                        {post.bibleVerse}
+                    </p>
+                    )}
+                    {(post.author || (post.date && !isAnnouncement)) && (
+                    <div className="text-sm text-gray-400 mb-2">
+                        {post.author && <span>{post.author}</span>}
+                        {post.author && post.date && !isAnnouncement && <span className="mx-2">|</span>}
+                        {post.date && !isAnnouncement && <span>{post.date}</span>}
+                    </div>
+                    )}
+                </button>
+                {expandedPostId === post.id && (
+                    <div className="p-4 pt-0">
+                    <p className="text-gray-300 whitespace-pre-wrap border-t border-gray-700 pt-4">{post.content}</p>
+                    </div>
                 )}
-                {(post.author || post.date) && (
-                  <div className="text-sm text-gray-400 mb-2">
-                    {post.author && <span>{post.author}</span>}
-                    {post.author && post.date && <span className="mx-2">|</span>}
-                    {post.date && <span>{post.date}</span>}
-                  </div>
-                )}
-              </button>
-              {expandedPostId === post.id && (
-                <div className="p-4 pt-0">
-                  <p className="text-gray-300 whitespace-pre-wrap border-t border-gray-700 pt-4">{post.content}</p>
                 </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-// Password Change Component (now used within AdminPanel)
+// Password Change Component
 function PasswordChange() {
     const { auth, user } = useFirebase();
     const [currentPassword, setCurrentPassword] = useState('');
@@ -333,7 +349,87 @@ function PasswordChange() {
     );
 }
 
-// Content Management Component (now used within AdminPanel)
+// Custom API Key Modal Component
+function ApiKeyModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const [key, setKey] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      const saved = localStorage.getItem('gemini_api_key');
+      if (saved) setKey(saved);
+    }
+  }, [isOpen]);
+
+  const handleSave = () => {
+    if (!key.trim()) {
+      alert('API Key를 입력해주세요.');
+      return;
+    }
+    localStorage.setItem('gemini_api_key', key.trim());
+    alert('API Key가 저장되었습니다.');
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+      <div className="bg-[#1F2937] rounded-lg max-w-md w-full shadow-2xl overflow-hidden border border-gray-700 relative">
+        <button 
+            onClick={onClose} 
+            className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors focus:outline-none"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+        
+        <div className="p-6 space-y-5">
+            <h3 className="text-xl font-bold text-white mb-2">Google AI API Key 설정</h3>
+
+          {/* Warning Box */}
+          <div className="bg-[#2D1A1A] border border-[#EF4444] rounded-md p-4 text-[#EF4444] text-sm leading-relaxed">
+            이 앱을 사용하려면 Google AI API Key가 필요합니다. 아래에 입력해주세요.
+          </div>
+
+          {/* Input Section */}
+          <div>
+            <label className="block text-sm font-bold text-gray-300 mb-2">Google AI API Key 입력</label>
+            <input 
+              type="password" 
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              placeholder="AlzaSy..." 
+              className="w-full bg-[#111827] border border-gray-600 rounded-lg py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-600"
+            />
+            <p className="text-xs text-gray-500 mt-2">API Key는 브라우저에만 저장되며, 외부 서버로 전송되지 않습니다.</p>
+          </div>
+
+          {/* Instructions */}
+          <div className="bg-[#374151] rounded-lg p-5 text-sm space-y-3">
+            <h4 className="font-bold text-white">Google AI API Key 발급방법</h4>
+            <ol className="list-decimal list-inside space-y-2 text-gray-300 text-xs leading-relaxed">
+              <li><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline font-medium">Google AI Studio</a> 페이지로 이동하여 로그인합니다.</li>
+              <li>'Get API Key' 또는 'Create API key' 버튼을 클릭합니다.</li>
+              <li>생성된 API Key를 복사합니다.</li>
+              <li>복사한 Key를 위 입력창에 붙여넣고 'Key 저장' 버튼을 누릅니다.</li>
+            </ol>
+          </div>
+
+          {/* Save Button */}
+          <button 
+            onClick={handleSave}
+            className="w-full bg-[#1E40AF] hover:bg-[#1D4ED8] text-white font-bold py-3.5 px-4 rounded-lg transition duration-200 text-base"
+          >
+            Key 저장
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Content Management Component
 function ContentManagement() {
   const { db } = useFirebase();
   const [activeAdminTab, setActiveAdminTab] = useState('sermons');
@@ -346,6 +442,12 @@ function ContentManagement() {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Post | null>(null);
   const [expandedAdminPostId, setExpandedAdminPostId] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewType, setPreviewType] = useState<string>('');
+  const [bulkItems, setBulkItems] = useState<{title: string, content: string, date?: string}[]>([]);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const showSermonFields = activeAdminTab === 'sermons';
   const showAuthorDateFields = activeAdminTab === 'sermons' || activeAdminTab === 'columns';
@@ -359,6 +461,13 @@ function ContentManagement() {
     });
     return () => unsubscribe();
   }, [db, activeAdminTab]);
+  
+  // Cleanup preview URL on unmount or change
+  useEffect(() => {
+    return () => {
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const clearForm = () => {
     setTitle('');
@@ -367,6 +476,73 @@ function ContentManagement() {
     setDate('');
     setBibleVerse('');
     setEditingPost(null);
+    setPreviewUrl(null);
+    setPreviewType('');
+    setBulkItems([]);
+    if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+    }
+  };
+
+  const handleBulkSave = async () => {
+    if (!db || bulkItems.length === 0) return;
+    
+    try {
+        const reversedItems = [...bulkItems].reverse();
+
+        for (const item of reversedItems) {
+            const postData: { [key: string]: any } = {
+                title: item.title,
+                content: item.content,
+                timestamp: serverTimestamp(),
+            };
+            if (item.date && item.date !== 'null') {
+                postData.date = item.date;
+            }
+            
+            await addDoc(collection(db, activeAdminTab), postData);
+        }
+        
+        clearForm();
+        alert(`${bulkItems.length}개의 게시물이 저장되었습니다.`);
+    } catch (error) {
+        console.error("Error bulk saving:", error);
+        alert("일괄 저장 중 오류가 발생했습니다.");
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (!db || posts.length === 0) return;
+    
+    // Safety check
+    if (activeAdminTab !== 'announcements') return;
+
+    if (!window.confirm(`현재 목록에 있는 ${posts.length}개의 공지사항을 모두 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+    
+    try {
+        // Chunk into batches of 400 to stay safely under the 500 limit
+        const chunkArray = (arr: Post[], size: number) => {
+            return Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>
+                arr.slice(i * size, i * size + size)
+            );
+        };
+
+        const chunks = chunkArray(posts, 400);
+
+        for (const chunk of chunks) {
+            const batch = writeBatch(db);
+            chunk.forEach(post => {
+                const ref = doc(db, activeAdminTab, post.id);
+                batch.delete(ref);
+            });
+            await batch.commit();
+        }
+
+        alert('모든 공지사항이 삭제되었습니다.');
+    } catch (e) {
+        console.error("Error deleting all:", e);
+        alert('일괄 삭제 중 오류가 발생했습니다.');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -408,6 +584,7 @@ function ContentManagement() {
     setBibleVerse(post.bibleVerse || '');
     setAuthor(post.author || '');
     setDate(post.date || '');
+    setBulkItems([]); // Clear bulk items if switching to edit mode
     window.scrollTo(0, 0);
   };
   
@@ -434,6 +611,187 @@ function ContentManagement() {
   
   const toggleAdminExpand = (postId: string) => {
     setExpandedAdminPostId(prevId => (prevId === postId ? null : postId));
+  };
+
+  // AI Analysis Handler
+  const handleAIAnalysis = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Support Images and PDFs
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+        alert('이미지 파일(jpg, png 등) 또는 PDF 파일만 지원됩니다.');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+    }
+    
+    // Create preview
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
+    setPreviewType(file.type);
+
+    setIsAnalyzing(true);
+    setBulkItems([]); // Clear previous bulk items
+
+    try {
+        // 1. Convert file to Base64
+        const base64Data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => {
+                const result = reader.result as string;
+                // Remove the "data:mime/type;base64," prefix
+                const base64 = result.split(',')[1];
+                resolve(base64);
+            };
+            reader.onerror = error => reject(error);
+        });
+
+        // 2. Initialize Gemini API
+        // Try to get key from localStorage first, then env variable
+        const savedKey = localStorage.getItem('gemini_api_key');
+        // Safe access to process.env (now polyfilled, but simple check remains)
+        let envKey = undefined;
+        if (typeof process !== 'undefined' && process.env) {
+             envKey = process.env.API_KEY;
+        }
+        
+        const apiKey = savedKey || envKey;
+        
+        if (!apiKey) {
+            alert("Google AI API Key가 설정되지 않았습니다. 관리자 페이지 우측 상단의 'API Key 설정' 버튼을 눌러 키를 등록해주세요.");
+            setIsAnalyzing(false);
+            return;
+        }
+
+        const ai = new GoogleGenAI({ apiKey });
+        const model = 'gemini-2.5-flash';
+
+        // 3. Prepare Prompt and Schema based on active tab
+        let promptText = "";
+        let responseSchema: any = undefined;
+
+        if (activeAdminTab === 'announcements') {
+            // BULK MODE FOR ANNOUNCEMENTS
+            promptText = `
+            Analyze this church bulletin image (numbered list).
+            Extract EACH numbered item as a separate object.
+            
+            For each item:
+            - 'title': Extract the bold/heading part.
+            - 'content': Extract the details or description following the title.
+            - 'date': Extract date string if present (e.g. '12월 14일').
+            
+            Return an object with an 'items' array.
+            `;
+            
+            responseSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    items: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                title: { type: Type.STRING },
+                                content: { type: Type.STRING },
+                                date: { type: Type.STRING }
+                            }
+                        }
+                    }
+                }
+            };
+
+        } else {
+            // SINGLE ITEM MODE FOR OTHERS
+            let contextInstruction = "";
+            if (activeAdminTab === 'sermons') {
+                contextInstruction = `
+                The user is uploading a sermon script or bulletin.
+                - Extract the Sermon Title into 'title'.
+                - Extract the Bible Verse (e.g. John 3:16) into 'bibleVerse'.
+                - Extract the Preacher's Name into 'author'.
+                - Extract the full sermon text or summary into 'content'.
+                - Extract the date if present into 'date'.
+                `;
+            } else if (activeAdminTab === 'columns') {
+                contextInstruction = `
+                The user is uploading a pastor's column or essay.
+                - Extract the Column Title into 'title'.
+                - Extract the Author Name into 'author'.
+                - Extract the full column body text into 'content'.
+                - Extract the date if present into 'date'.
+                `;
+            } else if (activeAdminTab === 'prayers') {
+                contextInstruction = `
+                The user is uploading a prayer text.
+                - Extract the prayer title into 'title'.
+                - Extract the full prayer text into 'content'.
+                `;
+            }
+            
+            promptText = `
+                Analyze this church document (image/PDF) which is in Korean.
+                ${contextInstruction}
+                
+                Return a valid JSON object with the following fields:
+                - title (string): The title.
+                - bibleVerse (string, optional): Only if applicable.
+                - author (string, optional): Only if applicable.
+                - date (string, optional): YYYY-MM-DD format if found.
+                - content (string): The main extracted text/body. Ensure all relevant text is captured here.
+            `;
+            
+            responseSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    title: { type: Type.STRING },
+                    bibleVerse: { type: Type.STRING },
+                    author: { type: Type.STRING },
+                    date: { type: Type.STRING },
+                    content: { type: Type.STRING },
+                }
+            };
+        }
+
+        // 4. Generate Content
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: {
+                parts: [
+                    { inlineData: { mimeType: file.type, data: base64Data } },
+                    { text: promptText }
+                ]
+            },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: responseSchema
+            }
+        });
+
+        // 5. Parse and Fill Form
+        const resultText = response.text;
+        if (resultText) {
+            const data = JSON.parse(resultText);
+            console.log("AI Extraction Result:", data);
+
+            if (activeAdminTab === 'announcements' && data.items && Array.isArray(data.items) && data.items.length > 0) {
+                setBulkItems(data.items);
+            } else {
+                if (data.title) setTitle(data.title);
+                if (data.bibleVerse) setBibleVerse(data.bibleVerse);
+                if (data.author) setAuthor(data.author);
+                if (data.date) setDate(data.date);
+                if (data.content) setContent(data.content);
+            }
+        }
+
+    } catch (error) {
+        console.error("AI Analysis failed:", error);
+        alert("AI 분석 중 오류가 발생했습니다. 로그를 확인해주세요.\n\n" + error);
+    } finally {
+        setIsAnalyzing(false);
+    }
   };
 
   const contentTabs = [
@@ -463,36 +821,182 @@ function ContentManagement() {
         </nav>
       </div>
 
-      <form onSubmit={handleSubmit} className="mb-8 bg-gray-800 py-4 px-1 rounded-lg max-w-2xl mx-auto">
-        <h3 className="text-xl font-semibold mb-4 px-3">
-          {editingPost ? '게시물 수정' : '새 게시물 작성'}
+      <div className="mb-8 bg-gray-800 py-4 px-1 rounded-lg max-w-2xl mx-auto">
+        <h3 className="text-xl font-semibold mb-4 px-3 flex justify-between items-center">
+          <span>{editingPost ? '게시물 수정' : '새 게시물 작성'}</span>
         </h3>
-        <div className="space-y-4">
-          <input type="text" placeholder="제목" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" required />
-          {showSermonFields && (
-            <input type="text" placeholder="성경구절" value={bibleVerse} onChange={(e) => setBibleVerse(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
-          )}
-          {showAuthorDateFields && (
-            <>
-              <input type="text" placeholder="작성자" value={author} onChange={(e) => setAuthor(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
-            </>
-          )}
-          <textarea placeholder="내용" value={content} onChange={(e) => setContent(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" rows={8} required />
-        </div>
-        <div className="mt-4 flex items-center space-x-2 px-3">
-          <button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
-            {editingPost ? '수정 완료' : '게시물 등록'}
-          </button>
-          {editingPost && (
-            <button type="button" onClick={cancelEdit} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
-              취소
-            </button>
-          )}
-        </div>
-      </form>
+        
+        {/* AI Auto-Fill Section */}
+        {!editingPost && bulkItems.length === 0 && (
+            <div className="mx-3 mb-6 p-4 border border-teal-500/30 bg-teal-900/10 rounded-lg">
+                <label className="block text-sm font-medium text-teal-300 mb-2 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                    </svg>
+                    AI 자동 입력 (이미지/PDF)
+                </label>
+                <div className="flex gap-2 items-center">
+                    <input 
+                        type="file" 
+                        accept="image/*,application/pdf"
+                        onChange={handleAIAnalysis}
+                        ref={fileInputRef}
+                        disabled={isAnalyzing}
+                        className="block w-full text-sm text-gray-400
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-teal-600 file:text-white
+                        hover:file:bg-teal-700
+                        disabled:opacity-50"
+                    />
+                    {isAnalyzing && (
+                        <div className="flex items-center text-teal-400 text-sm font-medium animate-pulse whitespace-nowrap">
+                             <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-teal-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            분석 중...
+                        </div>
+                    )}
+                </div>
+                
+                {previewUrl && (
+                  <div className="mt-4 mb-4 relative bg-gray-900 rounded-lg p-2 border border-teal-500/30">
+                      {previewType.startsWith('image/') ? (
+                          <img src={previewUrl} alt="Preview" className="max-h-96 max-w-full mx-auto rounded-md" />
+                      ) : (
+                           <div className="flex flex-col items-center justify-center p-8 text-gray-400">
+                              <svg className="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                              <span className="text-sm">PDF 파일이 선택되었습니다</span>
+                           </div>
+                      )}
+                      <button 
+                          type="button"
+                          onClick={() => {
+                              setPreviewUrl(null);
+                              setPreviewType('');
+                              if (fileInputRef.current) fileInputRef.current.value = '';
+                          }}
+                          className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700"
+                          title="미리보기 삭제"
+                      >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                  </div>
+                )}
+                
+                <p className="text-xs text-gray-400 mt-2">주보나 원고를 촬영하여 올리시면 내용을 자동으로 입력합니다.</p>
+            </div>
+        )}
+
+        {/* Bulk Review UI */}
+        {bulkItems.length > 0 ? (
+            <div className="px-3 space-y-4">
+                <div className="bg-teal-900/20 border border-teal-500/50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-lg font-bold text-teal-400">일괄 등록 확인</h4>
+                        <span className="bg-teal-700 text-white text-xs px-2 py-1 rounded-full">{bulkItems.length}개 항목 감지됨</span>
+                    </div>
+
+                    {/* PREVIEW IN BULK MODE */}
+                    {previewUrl && (
+                         <div className="mb-4 p-2 bg-black/40 rounded border border-gray-600">
+                             <p className="text-xs text-gray-400 mb-1">원본 이미지:</p>
+                             {previewType.startsWith('image/') ? (
+                                 <img src={previewUrl} alt="Original" className="max-h-60 max-w-full w-auto mx-auto rounded" />
+                             ) : (
+                                <div className="text-center text-gray-500 py-4 text-sm">PDF 파일 (미리보기 불가)</div>
+                             )}
+                         </div>
+                    )}
+
+                    <p className="text-gray-300 text-sm mb-4">
+                        이미지에서 {bulkItems.length}개의 공지사항을 발견했습니다. 아래 내용을 확인 후 '모두 저장'을 누르면 각각 별도의 게시물로 등록됩니다.
+                    </p>
+                    
+                    <div className="max-h-96 overflow-y-auto space-y-3 mb-4 pr-1 scrollbar-thin scrollbar-thumb-gray-600">
+                        {bulkItems.map((item, idx) => {
+                             let displayTitle = item.title;
+                             // Display preview logic
+                             displayTitle = displayTitle.replace(/^[\d]+[\.\)]\s*/, '');
+                             if (item.date && item.date !== 'null') {
+                                 const formattedDate = item.date.replace(/\(주\)/g, '(주일)');
+                                 displayTitle = `${displayTitle} (${formattedDate})`;
+                             }
+                            return (
+                                <div key={idx} className="bg-gray-700 p-3 rounded border border-gray-600">
+                                    <div className="flex justify-between items-start">
+                                        <div className="font-bold text-white mb-1">
+                                            {displayTitle}
+                                        </div>
+                                    </div>
+                                    <div className="text-sm text-gray-300 whitespace-pre-wrap">{item.content}</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={handleBulkSave}
+                            className="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md transition duration-300"
+                        >
+                            모두 저장 ({bulkItems.length}개)
+                        </button>
+                        <button 
+                            onClick={() => { setBulkItems([]); clearForm(); }}
+                            className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition duration-300"
+                        >
+                            취소
+                        </button>
+                    </div>
+                </div>
+            </div>
+        ) : (
+            <form onSubmit={handleSubmit}>
+                <div className="space-y-4">
+                    <input type="text" placeholder="제목" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" required />
+                    {showSermonFields && (
+                        <input type="text" placeholder="성경구절" value={bibleVerse} onChange={(e) => setBibleVerse(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
+                    )}
+                    {showAuthorDateFields && (
+                        <>
+                        <input type="text" placeholder="작성자" value={author} onChange={(e) => setAuthor(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
+                        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
+                        </>
+                    )}
+                    <textarea placeholder="내용" value={content} onChange={(e) => setContent(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" rows={8} required />
+                </div>
+                <div className="mt-4 flex items-center space-x-2 px-3">
+                    <button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
+                        {editingPost ? '수정 완료' : '게시물 등록'}
+                    </button>
+                    {editingPost && (
+                        <button type="button" onClick={cancelEdit} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
+                        취소
+                        </button>
+                    )}
+                </div>
+            </form>
+        )}
+      </div>
 
       <div className="space-y-4">
+        {activeAdminTab === 'announcements' && posts.length > 0 && (
+             <div className="flex justify-end mb-4 px-1">
+                 <button 
+                     type="button"
+                     onClick={handleDeleteAll}
+                     className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 flex items-center gap-2"
+                 >
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                     </svg>
+                     공지사항 전체 삭제 ({posts.length}개)
+                 </button>
+             </div>
+        )}
         {posts.map(post => (
           <div key={post.id} className="bg-gray-800 rounded-lg shadow overflow-hidden">
             <div className="flex justify-between items-center p-4">
@@ -546,13 +1050,13 @@ function ContentManagement() {
   );
 }
 
-
 // Admin Panel Component
 function AdminPanel() {
   const { auth, logout, isAdmin } = useFirebase();
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [adminSubTab, setAdminSubTab] = useState('content');
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -605,10 +1109,20 @@ function AdminPanel() {
     <div className="p-4 md:p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">관리자 페이지</h2>
-        <button onClick={logout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
-          로그아웃
-        </button>
+        <div className="flex space-x-2">
+            <button 
+                onClick={() => setShowApiKeyModal(true)} 
+                className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md transition duration-300 text-sm"
+            >
+              API Key 설정
+            </button>
+            <button onClick={logout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition duration-300 text-sm">
+              로그아웃
+            </button>
+        </div>
       </div>
+
+      <ApiKeyModal isOpen={showApiKeyModal} onClose={() => setShowApiKeyModal(false)} />
       
        <div className="mb-4 border-b border-gray-700">
         <nav className="-mb-px flex space-x-4" aria-label="Tabs">
@@ -727,7 +1241,7 @@ function App() {
   );
 }
 
-const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
+const root = createRoot(document.getElementById('root') as HTMLElement);
 root.render(
   <React.StrictMode>
     <FirebaseProvider>
