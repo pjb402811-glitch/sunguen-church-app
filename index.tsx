@@ -740,11 +740,16 @@ function ContentManagement() {
             // BULK MODE FOR ANNOUNCEMENTS
             promptText = `
             Analyze this church bulletin image (numbered list).
-            Extract EACH numbered item as a separate object.
+            
+            Rules for extraction:
+            1. Extract each numbered item as a separate object.
+            2. **CRITICAL**: If a numbered item contains multiple sub-events or a list of events with dates/times (e.g., item 12 has multiple rows of events), **SPLIT THEM into separate items**. 
+               - Do NOT group them under one main title. 
+               - Example: If #12 lists "Christmas Service" and "New Year Service" on separate lines, create TWO separate items.
             
             For each item:
-            - 'title': Extract the bold/heading part.
-            - 'content': Extract the details or description following the title.
+            - 'title': Extract the specific event name.
+            - 'content': Extract the details (time, location, etc.).
             - 'date': Extract date string if present (e.g. '12월 14일').
             
             Return an object with an 'items' array.
@@ -1150,17 +1155,26 @@ function ContentManagement() {
 
 function AdminLogin() {
   const { auth } = useFirebase();
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth) return;
+    
+    // Use the global admin email variable
+    const adminEmail = typeof __admin_email !== 'undefined' ? __admin_email : '';
+    
+    if (!adminEmail || adminEmail === 'YOUR_ADMIN_EMAIL') {
+         setError('관리자 이메일 설정이 올바르지 않습니다. index.html 설정을 확인해주세요.');
+         return;
+    }
+
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, adminEmail, password);
     } catch (err) {
-      setError('로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.');
+      console.error(err);
+      setError('로그인에 실패했습니다. 비밀번호를 확인해주세요.');
     }
   };
 
@@ -1168,18 +1182,9 @@ function AdminLogin() {
     <div className="flex flex-col items-center justify-center min-h-[50vh] p-4">
       <form onSubmit={handleLogin} className="w-full max-w-md bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
         <h2 className="text-xl font-bold text-white mb-6 text-center">관리자 로그인</h2>
+        
         {error && <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded text-red-200 text-sm">{error}</div>}
-        <div className="mb-4">
-          <label className="block text-gray-400 mb-2 text-sm font-bold">이메일</label>
-          <input 
-            type="email" 
-            value={email} 
-            onChange={e => setEmail(e.target.value)} 
-            className="w-full p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 transition" 
-            placeholder="admin@example.com"
-            required 
-          />
-        </div>
+        
          <div className="mb-6">
           <label className="block text-gray-400 mb-2 text-sm font-bold">비밀번호</label>
           <input 
@@ -1432,11 +1437,16 @@ function App() {
   );
 }
 
-const root = createRoot(document.getElementById('root') as HTMLElement);
-root.render(
-  <React.StrictMode>
-    <FirebaseProvider>
-      <App />
-    </FirebaseProvider>
-  </React.StrictMode>
-);
+const rootElement = document.getElementById('root');
+if (rootElement) {
+    const root = createRoot(rootElement);
+    root.render(
+      <React.StrictMode>
+        <FirebaseProvider>
+          <App />
+        </FirebaseProvider>
+      </React.StrictMode>
+    );
+} else {
+    console.error("Failed to find the root element");
+}
