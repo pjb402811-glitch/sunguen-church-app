@@ -204,6 +204,71 @@ interface Post {
 
 // --- Components ---
 
+// IOS Install Instructions Modal
+function IosInstallModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
+      <div className="bg-[#1F2937] rounded-xl max-w-sm w-full shadow-2xl overflow-hidden border border-gray-700 relative p-6">
+        <button 
+            onClick={onClose} 
+            className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors focus:outline-none"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+
+        <h3 className="text-xl font-bold text-white mb-4 text-center">아이폰에 앱 설치하기</h3>
+        
+        <div className="space-y-4 text-gray-300 text-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 bg-gray-700 p-2 rounded-lg">
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+               </svg>
+            </div>
+            <div>
+              <p className="font-semibold text-white">1단계</p>
+              <p>사파리(Safari) 브라우저 하단의 <span className="text-blue-400 font-bold">공유 버튼</span>을 눌러주세요.</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+             <div className="flex-shrink-0 bg-gray-700 p-2 rounded-lg">
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+               </svg>
+            </div>
+            <div>
+              <p className="font-semibold text-white">2단계</p>
+              <p>메뉴에서 <span className="font-bold text-white">'홈 화면에 추가'</span>를 찾아 선택해주세요.</p>
+            </div>
+          </div>
+          
+           <div className="flex items-start gap-3">
+             <div className="flex-shrink-0 bg-gray-700 p-2 rounded-lg">
+               <span className="font-bold text-lg text-white">추가</span>
+            </div>
+            <div>
+              <p className="font-semibold text-white">3단계</p>
+              <p>우측 상단의 <span className="font-bold text-blue-400">'추가'</span> 버튼을 누르면 설치가 완료됩니다.</p>
+            </div>
+          </div>
+        </div>
+
+        <button 
+          onClick={onClose}
+          className="w-full mt-6 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200"
+        >
+          확인했습니다
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Generic Content Display Component
 function ContentDisplay({ collectionName, title }: { collectionName: string; title: string }) {
   const { db } = useFirebase();
@@ -373,7 +438,7 @@ function ApiKeyModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
       <div className="bg-[#1F2937] rounded-lg max-w-md w-full shadow-2xl overflow-hidden border border-gray-700 relative">
         <button 
             onClick={onClose} 
@@ -802,321 +867,362 @@ function ContentManagement() {
   ];
 
   return (
-    <div className="p-4 md:p-6">
-       <div className="mb-4 border-b border-gray-700">
-        <nav className="-mb-px flex space-x-4" aria-label="Tabs">
-          {contentTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => { setActiveAdminTab(tab.id); cancelEdit(); }}
-              className={`${
-                activeAdminTab === tab.id
-                  ? 'border-teal-400 text-teal-400'
-                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
-              } whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      <div className="mb-8 bg-gray-800 py-4 px-1 rounded-lg max-w-2xl mx-auto">
-        <h3 className="text-xl font-semibold mb-4 px-3 flex justify-between items-center">
-          <span>{editingPost ? '게시물 수정' : '새 게시물 작성'}</span>
-        </h3>
+    <div>
+        {/* Content Type Tabs */}
+        <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
+            {contentTabs.map((tab) => (
+                <button
+                    key={tab.id}
+                    onClick={() => setActiveAdminTab(tab.id)}
+                    className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                        activeAdminTab === tab.id
+                            ? 'bg-teal-600 text-white'
+                            : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                    }`}
+                >
+                    {tab.label}
+                </button>
+            ))}
+        </div>
         
-        {/* AI Auto-Fill Section */}
-        {!editingPost && bulkItems.length === 0 && (
-            <div className="mx-3 mb-6 p-4 border border-teal-500/30 bg-teal-900/10 rounded-lg">
-                <label className="block text-sm font-medium text-teal-300 mb-2 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                    </svg>
-                    AI 자동 입력 (이미지/PDF)
-                </label>
-                <div className="flex gap-2 items-center">
-                    <input 
-                        type="file" 
-                        accept="image/*,application/pdf"
-                        onChange={handleAIAnalysis}
-                        ref={fileInputRef}
-                        disabled={isAnalyzing}
-                        className="block w-full text-sm text-gray-400
-                        file:mr-4 file:py-2 file:px-4
-                        file:rounded-full file:border-0
-                        file:text-sm file:font-semibold
-                        file:bg-teal-600 file:text-white
-                        hover:file:bg-teal-700
-                        disabled:opacity-50"
-                    />
+        {/* Editor Form */}
+        <div className="bg-gray-800 p-6 rounded-lg mb-8 border border-gray-700 shadow-xl">
+             <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-white">
+                    {editingPost ? '게시물 수정' : '새 게시물 작성'}
+                </h3>
+                {editingPost && (
+                    <button onClick={cancelEdit} className="text-gray-400 hover:text-white text-sm">
+                        편집 취소
+                    </button>
+                )}
+             </div>
+
+             {/* AI Analysis Section */}
+             <div className="mb-6 p-4 bg-gray-700/50 rounded-lg border border-gray-600 border-dashed">
+                 <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                    <div className="flex-grow w-full">
+                         <label className="block text-sm font-bold text-blue-400 mb-1 flex items-center">
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                            AI 자동 분석 (이미지/PDF)
+                         </label>
+                         <p className="text-xs text-gray-400 mb-2">주보, 설교문, 공지사항 이미지를 올리면 자동으로 내용을 채워줍니다.</p>
+                         <input 
+                            type="file" 
+                            ref={fileInputRef}
+                            onChange={handleAIAnalysis}
+                            accept="image/*,application/pdf"
+                            className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+                         />
+                    </div>
                     {isAnalyzing && (
-                        <div className="flex items-center text-teal-400 text-sm font-medium animate-pulse whitespace-nowrap">
-                             <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-teal-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
+                        <div className="flex items-center text-yellow-400 text-sm font-bold animate-pulse whitespace-nowrap">
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                             분석 중...
                         </div>
                     )}
-                </div>
-                
-                {previewUrl && (
-                  <div className="mt-4 mb-4 relative bg-gray-900 rounded-lg p-2 border border-teal-500/30">
-                      {previewType.startsWith('image/') ? (
-                          <img src={previewUrl} alt="Preview" className="max-h-96 max-w-full mx-auto rounded-md" />
-                      ) : (
-                           <div className="flex flex-col items-center justify-center p-8 text-gray-400">
-                              <svg className="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                              <span className="text-sm">PDF 파일이 선택되었습니다</span>
-                           </div>
-                      )}
-                      <button 
-                          type="button"
-                          onClick={() => {
-                              setPreviewUrl(null);
-                              setPreviewType('');
-                              if (fileInputRef.current) fileInputRef.current.value = '';
-                          }}
-                          className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700"
-                          title="미리보기 삭제"
-                      >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                      </button>
-                  </div>
-                )}
-                
-                <p className="text-xs text-gray-400 mt-2">주보나 원고를 촬영하여 올리시면 내용을 자동으로 입력합니다.</p>
+                 </div>
+                 {previewUrl && (
+                    <div className="mt-4">
+                         {previewType.startsWith('image/') ? (
+                            <img src={previewUrl} alt="Preview" className="max-h-48 rounded border border-gray-600 object-contain bg-gray-900" />
+                         ) : (
+                            <div className="text-gray-300 text-sm p-3 bg-gray-800 rounded border border-gray-600 flex items-center">
+                                <svg className="w-5 h-5 mr-2 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V6.414A2 2 0 0016.414 5L14 2.586A2 2 0 0012.586 2H9z" /><path d="M3 8a2 2 0 012-2v10h8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" /></svg>
+                                PDF 파일이 선택되었습니다.
+                            </div>
+                         )}
+                    </div>
+                 )}
             </div>
-        )}
 
-        {/* Bulk Review UI */}
-        {bulkItems.length > 0 ? (
-            <div className="px-3 space-y-4">
-                <div className="bg-teal-900/20 border border-teal-500/50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-lg font-bold text-teal-400">일괄 등록 확인</h4>
-                        <span className="bg-teal-700 text-white text-xs px-2 py-1 rounded-full">{bulkItems.length}개 항목 감지됨</span>
+            {/* Bulk items preview for Announcements */}
+            {bulkItems.length > 0 && (
+                <div className="mb-6 bg-blue-900/30 border border-blue-500/30 rounded-lg p-4">
+                    <h4 className="font-bold text-blue-300 mb-2 flex items-center">
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                        AI 분석 결과: {bulkItems.length}개의 공지사항 발견
+                    </h4>
+                    <div className="max-h-60 overflow-y-auto space-y-2 mb-3 pr-2 custom-scrollbar">
+                        {bulkItems.map((item, idx) => (
+                            <div key={idx} className="bg-gray-800 p-2 rounded text-sm border border-gray-700">
+                                <div className="font-bold text-gray-200">{item.title}</div>
+                                <div className="text-gray-400 text-xs mt-1">{item.content}</div>
+                                {item.date && <div className="text-blue-400 text-xs mt-1">{item.date}</div>}
+                            </div>
+                        ))}
                     </div>
-
-                    {/* PREVIEW IN BULK MODE */}
-                    {previewUrl && (
-                         <div className="mb-4 p-2 bg-black/40 rounded border border-gray-600">
-                             <p className="text-xs text-gray-400 mb-1">원본 이미지:</p>
-                             {previewType.startsWith('image/') ? (
-                                 <img src={previewUrl} alt="Original" className="max-h-60 max-w-full w-auto mx-auto rounded" />
-                             ) : (
-                                <div className="text-center text-gray-500 py-4 text-sm">PDF 파일 (미리보기 불가)</div>
-                             )}
-                         </div>
-                    )}
-
-                    <p className="text-gray-300 text-sm mb-4">
-                        이미지에서 {bulkItems.length}개의 공지사항을 발견했습니다. 아래 내용을 확인 후 '모두 저장'을 누르면 각각 별도의 게시물로 등록됩니다.
-                    </p>
-                    
-                    <div className="max-h-96 overflow-y-auto space-y-3 mb-4 pr-1 scrollbar-thin scrollbar-thumb-gray-600">
-                        {bulkItems.map((item, idx) => {
-                             let displayTitle = item.title;
-                             // Display preview logic
-                             displayTitle = displayTitle.replace(/^[\d]+[\.\)]\s*/, '');
-                             if (item.date && item.date !== 'null') {
-                                 const formattedDate = item.date.replace(/\(주\)/g, '(주일)');
-                                 displayTitle = `${displayTitle} (${formattedDate})`;
-                             }
-                            return (
-                                <div key={idx} className="bg-gray-700 p-3 rounded border border-gray-600">
-                                    <div className="flex justify-between items-start">
-                                        <div className="font-bold text-white mb-1">
-                                            {displayTitle}
-                                        </div>
-                                    </div>
-                                    <div className="text-sm text-gray-300 whitespace-pre-wrap">{item.content}</div>
-                                </div>
-                            );
-                        })}
-                    </div>
-
                     <div className="flex gap-2">
                         <button 
+                            type="button" 
                             onClick={handleBulkSave}
-                            className="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md transition duration-300"
+                            className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition w-full"
                         >
-                            모두 저장 ({bulkItems.length}개)
+                            모두 저장하기
                         </button>
                         <button 
+                            type="button"
                             onClick={() => { setBulkItems([]); clearForm(); }}
-                            className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition duration-300"
+                            className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded transition"
                         >
                             취소
                         </button>
                     </div>
                 </div>
-            </div>
-        ) : (
-            <form onSubmit={handleSubmit}>
-                <div className="space-y-4">
-                    <input type="text" placeholder="제목" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" required />
-                    {showSermonFields && (
-                        <input type="text" placeholder="성경구절" value={bibleVerse} onChange={(e) => setBibleVerse(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
-                    )}
-                    {showAuthorDateFields && (
-                        <>
-                        <input type="text" placeholder="작성자" value={author} onChange={(e) => setAuthor(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
-                        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" />
-                        </>
-                    )}
-                    <textarea placeholder="내용" value={content} onChange={(e) => setContent(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500" rows={8} required />
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="title" className="block text-sm font-medium text-gray-400 mb-1">제목</label>
+                  <input
+                    type="text"
+                    id="title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    required
+                    className="block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
+                    placeholder="제목을 입력하세요"
+                  />
                 </div>
-                <div className="mt-4 flex items-center space-x-2 px-3">
-                    <button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
-                        {editingPost ? '수정 완료' : '게시물 등록'}
-                    </button>
-                    {editingPost && (
-                        <button type="button" onClick={cancelEdit} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
+
+                {showSermonFields && (
+                  <div>
+                    <label htmlFor="bibleVerse" className="block text-sm font-medium text-gray-400 mb-1">성경구절</label>
+                    <input
+                      type="text"
+                      id="bibleVerse"
+                      value={bibleVerse}
+                      onChange={(e) => setBibleVerse(e.target.value)}
+                      className="block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
+                      placeholder="예: 요한복음 3:16"
+                    />
+                  </div>
+                )}
+
+                {showAuthorDateFields && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="author" className="block text-sm font-medium text-gray-400 mb-1">작성자/설교자</label>
+                      <input
+                        type="text"
+                        id="author"
+                        value={author}
+                        onChange={(e) => setAuthor(e.target.value)}
+                        className="block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
+                        placeholder="이름 입력"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="date" className="block text-sm font-medium text-gray-400 mb-1">날짜</label>
+                      <input
+                        type="text"
+                        id="date"
+                        value={date}
+                        onChange={(e) => setDate(e.target.value)}
+                        className="block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
+                        placeholder="예: 2023-12-25"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label htmlFor="content" className="block text-sm font-medium text-gray-400 mb-1">내용</label>
+                  <textarea
+                    id="content"
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    required
+                    rows={10}
+                    className="block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
+                    placeholder="내용을 입력하세요"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-teal-600 hover:bg-teal-500 text-white font-bold py-3 px-4 rounded-md transition duration-200 shadow-lg"
+                  >
+                    {editingPost ? '수정 완료' : '게시물 등록'}
+                  </button>
+                  {editingPost && (
+                    <button
+                        type="button"
+                        onClick={cancelEdit}
+                        className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-md transition duration-200"
+                    >
                         취소
-                        </button>
-                    )}
+                    </button>
+                  )}
                 </div>
             </form>
-        )}
-      </div>
+        </div>
 
-      <div className="space-y-4">
-        {activeAdminTab === 'announcements' && posts.length > 0 && (
-             <div className="flex justify-end mb-4 px-1">
-                 <button 
-                     type="button"
-                     onClick={handleDeleteAll}
-                     className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 flex items-center gap-2"
-                 >
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                     </svg>
-                     공지사항 전체 삭제 ({posts.length}개)
-                 </button>
-             </div>
-        )}
-        {posts.map(post => (
-          <div key={post.id} className="bg-gray-800 rounded-lg shadow overflow-hidden">
-            <div className="flex justify-between items-center p-4">
-              <button onClick={() => toggleAdminExpand(post.id)} className="flex-grow text-left flex justify-between items-center focus:outline-none">
-                  <div>
-                      <h3 className="text-xl font-semibold text-teal-400">{post.title}</h3>
-                      {(post.author || post.date) && (
-                          <div className="text-sm text-gray-400 mt-1">
-                          {post.author && <span>{post.author}</span>}
-                          {post.author && post.date && <span className="mx-2">|</span>}
-                          {post.date && <span>{post.date}</span>}
-                          </div>
-                      )}
-                  </div>
-                  <svg className={`w-6 h-6 text-gray-400 transition-transform duration-300 transform flex-shrink-0 ml-4 ${expandedAdminPostId === post.id ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-              </button>
-              <div className="flex space-x-2 flex-shrink-0 ml-4">
-                  <button onClick={() => startEdit(post)} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">수정</button>
-                  <button onClick={() => setShowDeleteConfirm(post)} className="bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-1 px-3 rounded-md transition">삭제</button>
-              </div>
+        {/* Post List */}
+        <div className="space-y-4">
+            <div className="flex justify-between items-center mb-2">
+                <h3 className="text-xl font-bold text-white">
+                    등록된 게시물 <span className="text-sm font-normal text-gray-400">({posts.length})</span>
+                </h3>
+                {activeAdminTab === 'announcements' && posts.length > 0 && (
+                    <button 
+                        onClick={handleDeleteAll}
+                        className="text-red-400 hover:text-red-300 text-xs underline"
+                    >
+                        전체 삭제
+                    </button>
+                )}
             </div>
-            {expandedAdminPostId === post.id && (
-                <div className="px-4 pb-4">
-                    <div className="border-t border-gray-700 pt-4">
-                        {showSermonFields && post.bibleVerse && (
-                            <p className="text-sm text-yellow-300 italic mb-2">{post.bibleVerse}</p>
+            
+            {posts.length === 0 ? (
+                <div className="text-center py-10 bg-gray-800/50 rounded-lg border border-gray-700 border-dashed text-gray-500">
+                    게시물이 없습니다.
+                </div>
+            ) : (
+                posts.map((post) => (
+                    <div key={post.id} className="bg-gray-800 rounded-lg p-4 border border-gray-700 shadow-sm hover:border-gray-600 transition">
+                        <div className="flex justify-between items-start gap-4">
+                            <div className="flex-grow min-w-0" onClick={() => toggleAdminExpand(post.id)}>
+                                <h4 className="font-bold text-lg text-white truncate cursor-pointer hover:text-teal-400 transition-colors">{post.title}</h4>
+                                <div className="text-xs text-gray-400 mt-1 flex flex-wrap gap-2">
+                                    {post.date && <span>{post.date}</span>}
+                                    {post.author && <span>· {post.author}</span>}
+                                </div>
+                            </div>
+                            <div className="flex-shrink-0 flex space-x-2">
+                                <button 
+                                    onClick={() => startEdit(post)}
+                                    className="p-2 bg-blue-900/50 text-blue-400 rounded hover:bg-blue-900 hover:text-blue-300 transition"
+                                    title="수정"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                </button>
+                                <button 
+                                    onClick={() => setShowDeleteConfirm(post)}
+                                    className="p-2 bg-red-900/50 text-red-400 rounded hover:bg-red-900 hover:text-red-300 transition"
+                                    title="삭제"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {expandedAdminPostId === post.id && (
+                            <div className="mt-4 pt-4 border-t border-gray-700 text-sm text-gray-300 whitespace-pre-wrap animate-fadeIn">
+                                {post.content}
+                            </div>
                         )}
-                        <p className="text-gray-300 whitespace-pre-wrap">{post.content}</p>
+                    </div>
+                ))
+            )}
+        </div>
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[70] p-4">
+                <div className="bg-gray-800 rounded-lg max-w-sm w-full p-6 shadow-2xl border border-gray-700">
+                    <h3 className="text-xl font-bold text-white mb-2">삭제 확인</h3>
+                    <p className="text-gray-300 mb-6">
+                        '<span className="font-semibold text-white">{showDeleteConfirm.title}</span>' 게시물을 정말 삭제하시겠습니까?
+                        <br/><span className="text-red-400 text-sm">이 작업은 되돌릴 수 없습니다.</span>
+                    </p>
+                    <div className="flex justify-end gap-3">
+                        <button 
+                            onClick={() => setShowDeleteConfirm(null)}
+                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition"
+                        >
+                            취소
+                        </button>
+                        <button 
+                            onClick={() => deletePost(showDeleteConfirm.id)}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-bold transition"
+                        >
+                            삭제
+                        </button>
                     </div>
                 </div>
-            )}
-          </div>
-        ))}
-      </div>
-      
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 max-w-sm w-full mx-4">
-            <h3 className="text-lg font-bold text-white">삭제 확인</h3>
-            <p className="text-gray-300 mt-2 mb-4">"{showDeleteConfirm.title}" 게시물을 정말로 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.</p>
-            <div className="flex justify-end space-x-2">
-              <button onClick={() => setShowDeleteConfirm(null)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">취소</button>
-              <button onClick={() => deletePost(showDeleteConfirm.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md">삭제</button>
             </div>
-          </div>
-        </div>
-      )}
+        )}
     </div>
   );
 }
 
-// Admin Panel Component
-function AdminPanel() {
-  const { auth, logout, isAdmin } = useFirebase();
+function AdminLogin() {
+  const { auth } = useFirebase();
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [adminSubTab, setAdminSubTab] = useState('content');
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth) return;
-    setError('');
     try {
-      const adminEmail = typeof __admin_email !== 'undefined' ? __admin_email : '';
-      if (!adminEmail || adminEmail === 'PASTE_YOUR_ADMIN_EMAIL_HERE') {
-        setError('관리자 이메일이 설정되지 않았습니다.');
-        return;
-      }
-      await signInWithEmailAndPassword(auth, adminEmail, password);
+      await signInWithEmailAndPassword(auth, email, password);
     } catch (err) {
-      setError('로그인에 실패했습니다. 비밀번호를 확인해주세요.');
-      console.error(err);
+      setError('로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.');
     }
   };
 
-  if (!isAdmin) {
-    return (
-      <div className="p-4 md:p-6 max-w-md mx-auto">
-        <h2 className="text-2xl font-bold mb-4 text-center">관리자 로그인</h2>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-400">비밀번호</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-teal-500 focus:border-teal-500"
-              required
-            />
-          </div>
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-          <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
-            로그인
-          </button>
-        </form>
-      </div>
-    );
-  }
-  
-  const adminPageTabs = [
-      { id: 'content', label: '콘텐츠 관리' },
-      { id: 'password', label: '비밀번호 변경' },
-  ];
-
   return (
+    <div className="flex flex-col items-center justify-center min-h-[50vh] p-4">
+      <form onSubmit={handleLogin} className="w-full max-w-md bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+        <h2 className="text-xl font-bold text-white mb-6 text-center">관리자 로그인</h2>
+        {error && <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded text-red-200 text-sm">{error}</div>}
+        <div className="mb-4">
+          <label className="block text-gray-400 mb-2 text-sm font-bold">이메일</label>
+          <input 
+            type="email" 
+            value={email} 
+            onChange={e => setEmail(e.target.value)} 
+            className="w-full p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 transition" 
+            placeholder="admin@example.com"
+            required 
+          />
+        </div>
+         <div className="mb-6">
+          <label className="block text-gray-400 mb-2 text-sm font-bold">비밀번호</label>
+          <input 
+            type="password" 
+            value={password} 
+            onChange={e => setPassword(e.target.value)} 
+            className="w-full p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 transition" 
+            placeholder="비밀번호"
+            required 
+          />
+        </div>
+        <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded transition shadow-lg">로그인</button>
+      </form>
+    </div>
+  );
+}
+
+function AdminPanel() {
+   const { user, isAdmin, logout } = useFirebase();
+   const [adminSubTab, setAdminSubTab] = useState('content');
+   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+   
+   const adminPageTabs = [
+     { id: 'content', label: '콘텐츠 관리' },
+     { id: 'password', label: '비밀번호 변경' },
+   ];
+
+   if (!user || !isAdmin) {
+       return <AdminLogin />;
+   }
+
+   return (
     <div className="p-4 md:p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">관리자 페이지</h2>
+        <h2 className="text-2xl font-bold text-white">관리자 페이지</h2>
         <div className="flex space-x-2">
             <button 
                 onClick={() => setShowApiKeyModal(true)} 
-                className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md transition duration-300 text-sm"
+                className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md transition duration-300 text-sm border border-gray-600"
             >
               API Key 설정
             </button>
-            <button onClick={logout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition duration-300 text-sm">
+            <button onClick={logout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition duration-300 text-sm shadow-md">
               로그아웃
             </button>
         </div>
@@ -1124,7 +1230,7 @@ function AdminPanel() {
 
       <ApiKeyModal isOpen={showApiKeyModal} onClose={() => setShowApiKeyModal(false)} />
       
-       <div className="mb-4 border-b border-gray-700">
+       <div className="mb-6 border-b border-gray-700">
         <nav className="-mb-px flex space-x-4" aria-label="Tabs">
           {adminPageTabs.map((tab) => (
             <button
@@ -1145,13 +1251,61 @@ function AdminPanel() {
       {adminSubTab === 'content' && <ContentManagement />}
       {adminSubTab === 'password' && <PasswordChange />}
     </div>
-  );
+   );
 }
 
 // App Component
 function App() {
   const [activeTab, setActiveTab] = useState('sermons');
   const { isAuthReady, newContent, markAsRead, isOnline } = useFirebase();
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [isIos, setIsIos] = useState(false);
+  const [showIosInstruction, setShowIosInstruction] = useState(false);
+
+  useEffect(() => {
+    // Check if it's iOS
+    const isDeviceIos = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    setIsIos(isDeviceIos);
+
+    // Check if already in standalone mode (installed)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    
+    if (isStandalone) {
+        setShowInstallBanner(false);
+    } else {
+        if (isDeviceIos) {
+            // For iOS, show banner if not standalone
+            setShowInstallBanner(true);
+        }
+    }
+
+    // Android/Desktop: Listen for install prompt
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBanner(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (isIos) {
+        setShowIosInstruction(true);
+    } else if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+            setDeferredPrompt(null);
+            setShowInstallBanner(false);
+        }
+    }
+  };
 
   const handleTabClick = (tabId: string) => {
     setActiveTab(tabId);
@@ -1185,7 +1339,7 @@ function App() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-gray-900 pb-20"> {/* pb-20 for bottom banner space */}
       <header className="bg-gray-800 p-4 text-center shadow-lg">
         <h1 className="text-2xl font-bold text-white">
           성은감리교회
@@ -1232,11 +1386,48 @@ function App() {
       </main>
 
       {!isOnline && (
-        <div className="fixed bottom-4 right-4 bg-red-600 text-white text-sm font-bold py-2 px-4 rounded-lg shadow-lg z-50 flex items-center space-x-2 animate-pulse" role="alert" aria-live="assertive">
+        <div className="fixed bottom-24 right-4 bg-red-600 text-white text-sm font-bold py-2 px-4 rounded-lg shadow-lg z-50 flex items-center space-x-2 animate-pulse" role="alert" aria-live="assertive">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m-12.728 0a9 9 0 010-12.728m12.728 0L5.636 18.364m0-12.728L18.364 18.364" /></svg>
             <span>연결이 끊겼습니다. 오프라인 모드입니다.</span>
         </div>
       )}
+
+      {/* PWA Install Banner */}
+      {showInstallBanner && (
+        <div className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-4 shadow-2xl z-40 flex items-center justify-between transition-transform duration-300 transform translate-y-0">
+            <div className="flex items-center">
+                <div className="bg-teal-600 p-2 rounded-lg mr-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <div>
+                    <p className="text-white font-bold text-sm">앱으로 더 편하게 이용하세요</p>
+                    <p className="text-gray-400 text-xs">홈 화면에 추가하여 빠르게 접속</p>
+                </div>
+            </div>
+            <div className="flex items-center gap-2">
+                <button 
+                    onClick={() => setShowInstallBanner(false)}
+                    className="text-gray-400 hover:text-white p-2"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                </button>
+                <button 
+                    onClick={handleInstallClick}
+                    className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors whitespace-nowrap shadow-lg"
+                >
+                    앱 설치
+                </button>
+            </div>
+        </div>
+      )}
+
+      {/* iOS Instructions Modal */}
+      <IosInstallModal isOpen={showIosInstruction} onClose={() => setShowIosInstruction(false)} />
+
     </div>
   );
 }
