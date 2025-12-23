@@ -210,7 +210,7 @@ function ThreeAxesFourPillars() {
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-10 animate-fadeIn">
       {/* Title */}
       <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-amber-400 mb-2">가정교회 세 축과 네 기둥</h2>
+        <h2 className="text-2xl font-bold text-amber-400 mb-2">가정교회 세 축과 네 기둥</h2>
         <p className="text-gray-400 text-sm">성경적인 신약 교회의 회복을 위한 핵심 가치</p>
       </div>
 
@@ -218,26 +218,23 @@ function ThreeAxesFourPillars() {
       <section>
         <div className="flex items-center gap-3 mb-6 border-b border-amber-500/30 pb-2">
             <span className="text-3xl">🏗️</span>
-            <h3 className="text-2xl font-bold text-white">가정교회의 세 축 (시스템)</h3>
+            <h3 className="text-2xl font-bold text-white">가정교회의 세 축</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700 shadow-lg">
-            <div className="w-8 h-8 bg-amber-600 rounded-full flex items-center justify-center text-white font-bold mb-3 text-sm">1</div>
-            <h4 className="text-lg font-bold text-amber-400 mb-2">목장 모임</h4>
+            <h4 className="text-lg font-bold text-amber-400 mb-2">1. 목장 모임</h4>
             <p className="text-xs text-gray-300 leading-relaxed">
               매주 가정에서 모여 식사와 삶을 나누는 <strong>교회의 실체</strong>입니다. 영혼 구원이 일어나는 사역의 현장입니다.
             </p>
           </div>
           <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700 shadow-lg">
-            <div className="w-8 h-8 bg-amber-600 rounded-full flex items-center justify-center text-white font-bold mb-3 text-sm">2</div>
-            <h4 className="text-lg font-bold text-amber-400 mb-2">주일 연합 예배</h4>
+            <h4 className="text-lg font-bold text-amber-400 mb-2">2. 주일 연합 예배</h4>
             <p className="text-xs text-gray-300 leading-relaxed">
               경험한 은혜를 함께 찬양하고 말씀을 통해 <strong>재충전하는 축제</strong>입니다. 교회의 방향과 영성을 공급받는 시간입니다.
             </p>
           </div>
           <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700 shadow-lg">
-            <div className="w-8 h-8 bg-amber-600 rounded-full flex items-center justify-center text-white font-bold mb-3 text-sm">3</div>
-            <h4 className="text-lg font-bold text-amber-400 mb-2">삶 공부</h4>
+            <h4 className="text-lg font-bold text-amber-400 mb-2">3. 삶 공부</h4>
             <p className="text-xs text-gray-300 leading-relaxed">
               지식을 넘어 <strong>삶의 변화</strong>를 목표로 하는 훈련입니다. 가치관을 정립하고 사역자로 세워지는 과정입니다.
             </p>
@@ -249,7 +246,7 @@ function ThreeAxesFourPillars() {
       <section>
         <div className="flex items-center gap-3 mb-6 border-b border-amber-500/30 pb-2">
             <span className="text-3xl">🏛️</span>
-            <h3 className="text-2xl font-bold text-white">가정교회의 네 기둥 (정신)</h3>
+            <h3 className="text-2xl font-bold text-white">가정교회의 네 기둥</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-gray-800 p-5 rounded-2xl border-l-4 border-amber-500 shadow-md">
@@ -319,12 +316,6 @@ function MokjangOrder() {
             )}
           </div>
         ))}
-      </div>
-
-      <div className="mt-8 text-center bg-gray-800/20 py-3 px-6 rounded-full border border-gray-700/30">
-        <p className="text-teal-500/80 text-xs font-medium italic">
-          성은감리교회 행복한 목장 모임 가이드
-        </p>
       </div>
     </div>
   );
