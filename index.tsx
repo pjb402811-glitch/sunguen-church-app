@@ -204,6 +204,132 @@ interface Post {
 
 // --- Components ---
 
+// Three Axes and Four Pillars Component
+function ThreeAxesFourPillars() {
+  return (
+    <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-10 animate-fadeIn">
+      {/* Title */}
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-bold text-amber-400 mb-2">가정교회 세 축과 네 기둥</h2>
+        <p className="text-gray-400 text-sm">성경적인 신약 교회의 회복을 위한 핵심 가치</p>
+      </div>
+
+      {/* Three Axes Section */}
+      <section>
+        <div className="flex items-center gap-3 mb-6 border-b border-amber-500/30 pb-2">
+            <span className="text-3xl">🏗️</span>
+            <h3 className="text-2xl font-bold text-white">가정교회의 세 축 (시스템)</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700 shadow-lg">
+            <div className="w-8 h-8 bg-amber-600 rounded-full flex items-center justify-center text-white font-bold mb-3 text-sm">1</div>
+            <h4 className="text-lg font-bold text-amber-400 mb-2">목장 모임</h4>
+            <p className="text-xs text-gray-300 leading-relaxed">
+              매주 가정에서 모여 식사와 삶을 나누는 <strong>교회의 실체</strong>입니다. 영혼 구원이 일어나는 사역의 현장입니다.
+            </p>
+          </div>
+          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700 shadow-lg">
+            <div className="w-8 h-8 bg-amber-600 rounded-full flex items-center justify-center text-white font-bold mb-3 text-sm">2</div>
+            <h4 className="text-lg font-bold text-amber-400 mb-2">주일 연합 예배</h4>
+            <p className="text-xs text-gray-300 leading-relaxed">
+              경험한 은혜를 함께 찬양하고 말씀을 통해 <strong>재충전하는 축제</strong>입니다. 교회의 방향과 영성을 공급받는 시간입니다.
+            </p>
+          </div>
+          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700 shadow-lg">
+            <div className="w-8 h-8 bg-amber-600 rounded-full flex items-center justify-center text-white font-bold mb-3 text-sm">3</div>
+            <h4 className="text-lg font-bold text-amber-400 mb-2">삶 공부</h4>
+            <p className="text-xs text-gray-300 leading-relaxed">
+              지식을 넘어 <strong>삶의 변화</strong>를 목표로 하는 훈련입니다. 가치관을 정립하고 사역자로 세워지는 과정입니다.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Four Pillars Section */}
+      <section>
+        <div className="flex items-center gap-3 mb-6 border-b border-amber-500/30 pb-2">
+            <span className="text-3xl">🏛️</span>
+            <h3 className="text-2xl font-bold text-white">가정교회의 네 기둥 (정신)</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-gray-800 p-5 rounded-2xl border-l-4 border-amber-500 shadow-md">
+            <h4 className="font-bold text-amber-400 mb-2">1. 성경적 교회의 존재목적</h4>
+            <p className="text-sm text-gray-200 font-medium">영혼 구원하여 제자를 만든다.</p>
+          </div>
+          <div className="bg-gray-800 p-5 rounded-2xl border-l-4 border-amber-500 shadow-md">
+            <h4 className="font-bold text-amber-400 mb-2">2. 성경적 제자훈련방식</h4>
+            <p className="text-sm text-gray-200 font-medium">가르쳐서 만드는 제자가 아니라 본을 보여서 제자를 만든다.</p>
+          </div>
+          <div className="bg-gray-800 p-5 rounded-2xl border-l-4 border-amber-500 shadow-md">
+            <h4 className="font-bold text-amber-400 mb-2">3. 성경적 사역분담</h4>
+            <p className="text-sm text-gray-200 font-medium">목회자는 성도들을 준비시키고 성도는 목양을 하고 교회를 세운다.</p>
+          </div>
+          <div className="bg-gray-800 p-5 rounded-2xl border-l-4 border-amber-500 shadow-md">
+            <h4 className="font-bold text-amber-400 mb-2">4. 성경적 섬기는 리더십</h4>
+            <p className="text-sm text-gray-200 font-medium">인생의 목적은 섬김에 있고 진정한 리더십은 섬김에서 나온다.</p>
+          </div>
+        </div>
+      </section>
+
+      <div className="py-6 border-t border-gray-800 text-center">
+         <p className="text-gray-500 text-xs italic">"영혼을 구원하여 제자 삼는 행복한 가정교회"</p>
+      </div>
+    </div>
+  );
+}
+
+// Mokjang Order Display Component
+function MokjangOrder() {
+  const steps = [
+    { num: 1, title: "애찬나눔", desc: "식사 및 교제", icon: "🍱" },
+    { num: 2, title: "찬양", desc: "은혜의 찬양", icon: "🎵" },
+    { num: 3, title: "올리브블레싱", desc: "자녀 축복 기도", icon: "🌿" },
+    { num: 4, title: "말씀요약/나눔", desc: "주일설교 나눔", icon: "📖" },
+    { num: 5, title: "주보/칼럼", desc: "교회소식 공유", icon: "📰" },
+    { num: 6, title: "삶나눔", desc: "삶,감사, 기도내용", icon: "💬" },
+    { num: 7, title: "중보기도", desc: "목원/VIP 중보", icon: "🙏" },
+    { num: 8, title: "봉헌", desc: "정성어린 예물", icon: "🪙" },
+    { num: 9, title: "마무리기도", desc: "목자/목녀 기도", icon: "✨" },
+  ];
+
+  return (
+    <div className="p-2 md:p-6 max-w-xl mx-auto flex flex-col items-center justify-center min-h-[50vh]">
+      <div className="text-center mb-6">
+        <h2 className="text-2xl font-bold text-teal-400">목장나눔 순서</h2>
+      </div>
+      
+      {/* Ultra Compact 3x3 Grid with reduced height (min-h-[105px] -> [84px], py-3 -> py-2) and increased description text size (text-[10px] -> [11.5px]) */}
+      <div className="grid grid-cols-3 gap-3 w-full">
+        {steps.map((step, index) => (
+          <div key={step.num} className="relative">
+            <div className="bg-gray-800 border border-gray-700 rounded-xl flex flex-col items-center justify-center py-2 px-1 shadow-lg min-h-[84px] transition-transform active:scale-95">
+                <div className="absolute top-1 left-1 w-5 h-5 rounded-full bg-teal-600/90 text-white flex items-center justify-center text-[10px] font-bold">
+                  {step.num}
+                </div>
+                <div className="text-2xl mb-1">{step.icon}</div>
+                <h3 className="text-[14px] font-bold text-gray-100 text-center leading-tight mb-0.5">{step.title}</h3>
+                <p className="text-[11.5px] text-gray-400 text-center leading-tight opacity-90">{step.desc}</p>
+            </div>
+            
+            {/* Minimal Indicators for flow */}
+            {index % 3 !== 2 && (
+              <div className="absolute top-1/2 -right-2 transform -translate-y-1/2 text-teal-900/50 z-10">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M9 5l7 7-7 7" /></svg>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-8 text-center bg-gray-800/20 py-3 px-6 rounded-full border border-gray-700/30">
+        <p className="text-teal-500/80 text-xs font-medium italic">
+          성은감리교회 행복한 목장 모임 가이드
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // IOS Install Instructions Modal
 function IosInstallModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   if (!isOpen) return null;
@@ -713,9 +839,7 @@ function ContentManagement() {
         });
 
         // 2. Initialize Gemini API
-        // Try to get key from localStorage first, then env variable
         const savedKey = localStorage.getItem('gemini_api_key');
-        // Safe access to process.env (now polyfilled, but simple check remains)
         let envKey = undefined;
         if (typeof process !== 'undefined' && process.env) {
              envKey = process.env.API_KEY;
@@ -730,29 +854,30 @@ function ContentManagement() {
         }
 
         const ai = new GoogleGenAI({ apiKey });
-        const model = 'gemini-2.5-flash';
+        const model = 'gemini-3-flash-preview'; // Upgrade to latest flash model for better OCR
 
-        // 3. Prepare Prompt and Schema based on active tab
+        // 3. Prepare Prompt and Schema
         let promptText = "";
         let responseSchema: any = undefined;
 
         if (activeAdminTab === 'announcements') {
             // BULK MODE FOR ANNOUNCEMENTS
             promptText = `
-            Analyze this church bulletin image (numbered list).
+            Analyze this church bulletin image. It usually contains a numbered list of announcements.
             
-            Rules for extraction:
-            1. Extract each numbered item as a separate object.
-            2. **CRITICAL**: If a numbered item contains multiple sub-events or a list of events with dates/times (e.g., item 12 has multiple rows of events), **SPLIT THEM into separate items**. 
-               - Do NOT group them under one main title. 
-               - Example: If #12 lists "Christmas Service" and "New Year Service" on separate lines, create TWO separate items.
+            Strict Extraction Rules:
+            1. Extract each numbered item separately.
+            2. CRITICAL: If a single numbered section (like #12) lists multiple specific events with dates/times on separate lines, YOU MUST SPLIT them into individual items.
+            3. Each extracted item must have its own 'title' and 'content'.
             
-            For each item:
-            - 'title': Extract the specific event name.
-            - 'content': Extract the details (time, location, etc.).
-            - 'date': Extract date string if present (e.g. '12월 14일').
+            Example for splitting item #12:
+            - If it says: "12. Church Events: [newline] - Christmas Service 12/25 [newline] - New Year Service 1/1"
+            - You create TWO objects: {title: "Christmas Service", content: "12/25", ...} and {title: "New Year Service", content: "1/1", ...}
             
-            Return an object with an 'items' array.
+            Format:
+            - 'title': The name of the event or announcement.
+            - 'content': Details like time, location, etc.
+            - 'date': The specific date if mentioned.
             `;
             
             responseSchema = {
@@ -766,50 +891,48 @@ function ContentManagement() {
                                 title: { type: Type.STRING },
                                 content: { type: Type.STRING },
                                 date: { type: Type.STRING }
-                            }
+                            },
+                            required: ["title", "content"]
                         }
                     }
-                }
+                },
+                required: ["items"]
             };
 
         } else {
-            // SINGLE ITEM MODE FOR OTHERS
-            let contextInstruction = "";
-            if (activeAdminTab === 'sermons') {
-                contextInstruction = `
-                The user is uploading a sermon script or bulletin.
-                - Extract the Sermon Title into 'title'.
-                - Extract the Bible Verse (e.g. John 3:16) into 'bibleVerse'.
-                - Extract the Preacher's Name into 'author'.
-                - Extract the full sermon text or summary into 'content'.
-                - Extract the date if present into 'date'.
+            // SINGLE ITEM MODE FOR SERMONS/COLUMNS/PRAYERS
+            let specificInstructions = "";
+            if (activeAdminTab === 'columns') {
+                specificInstructions = `
+                This is a Pastor's Column (목회자 칼럼).
+                1. 'content' is the most important field.
+                2. YOU MUST TRANSCRIBE THE ENTIRE BODY TEXT word-for-word exactly as it appears in the image.
+                3. DO NOT SUMMARIZE. DO NOT SKIP ANY PARAGRAPHS.
+                4. Extract every sentence from start to finish.
                 `;
-            } else if (activeAdminTab === 'columns') {
-                contextInstruction = `
-                The user is uploading a pastor's column or essay.
-                - Extract the Column Title into 'title'.
-                - Extract the Author Name into 'author'.
-                - Extract the full column body text into 'content'.
-                - Extract the date if present into 'date'.
+            } else if (activeAdminTab === 'sermons') {
+                specificInstructions = `
+                This is a Sermon script.
+                - Extract 'title' and the FULL 'content' (sermon text).
+                - Extract 'bibleVerse' (e.g., Genesis 1:1).
+                - Extract 'author' and 'date'.
                 `;
-            } else if (activeAdminTab === 'prayers') {
-                contextInstruction = `
-                The user is uploading a prayer text.
-                - Extract the prayer title into 'title'.
-                - Extract the full prayer text into 'content'.
-                `;
+            } else {
+                specificInstructions = "Extract the title and the complete verbatim text of the document into the content field.";
             }
-            
+
             promptText = `
-                Analyze this church document (image/PDF) which is in Korean.
-                ${contextInstruction}
+                You are a professional Korean OCR assistant for a church.
+                Analyze the provided image and extract the information into JSON.
                 
-                Return a valid JSON object with the following fields:
-                - title (string): The title.
-                - bibleVerse (string, optional): Only if applicable.
-                - author (string, optional): Only if applicable.
-                - date (string, optional): YYYY-MM-DD format if found.
-                - content (string): The main extracted text/body. Ensure all relevant text is captured here.
+                ${specificInstructions}
+                
+                Fields:
+                - title: The main heading of the document.
+                - content: The FULL transcribed text of the article/sermon. (CRITICAL: Do not summarize!)
+                - bibleVerse: Only for sermons.
+                - author: The writer or speaker.
+                - date: Mentioned date string.
             `;
             
             responseSchema = {
@@ -820,7 +943,8 @@ function ContentManagement() {
                     author: { type: Type.STRING },
                     date: { type: Type.STRING },
                     content: { type: Type.STRING },
-                }
+                },
+                required: ["title", "content"]
             };
         }
 
@@ -845,7 +969,7 @@ function ContentManagement() {
             const data = JSON.parse(resultText);
             console.log("AI Extraction Result:", data);
 
-            if (activeAdminTab === 'announcements' && data.items && Array.isArray(data.items) && data.items.length > 0) {
+            if (activeAdminTab === 'announcements' && data.items && Array.isArray(data.items)) {
                 setBulkItems(data.items);
             } else {
                 if (data.title) setTitle(data.title);
@@ -853,12 +977,14 @@ function ContentManagement() {
                 if (data.author) setAuthor(data.author);
                 if (data.date) setDate(data.date);
                 if (data.content) setContent(data.content);
+                // Even if empty, let's at least clear previous content if explicitly found as empty
+                else if (data.content === "") setContent("");
             }
         }
 
     } catch (error) {
         console.error("AI Analysis failed:", error);
-        alert("AI 분석 중 오류가 발생했습니다. 로그를 확인해주세요.\n\n" + error);
+        alert("AI 분석 중 오류가 발생했습니다. 이미지가 너무 저해상도이거나 글씨가 너무 작을 수 있습니다.\n\n" + error);
     } finally {
         setIsAnalyzing(false);
     }
@@ -911,7 +1037,7 @@ function ContentManagement() {
                             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                             AI 자동 분석 (이미지/PDF)
                          </label>
-                         <p className="text-xs text-gray-400 mb-2">주보, 설교문, 공지사항 이미지를 올리면 자동으로 내용을 채워줍니다.</p>
+                         <p className="text-xs text-gray-400 mb-2">이미지 내의 글자를 모두 추출하여 자동으로 본문을 채웁니다. (요약 없이 전체 추출)</p>
                          <input 
                             type="file" 
                             ref={fileInputRef}
@@ -923,7 +1049,7 @@ function ContentManagement() {
                     {isAnalyzing && (
                         <div className="flex items-center text-yellow-400 text-sm font-bold animate-pulse whitespace-nowrap">
                             <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                            분석 중...
+                            전체 텍스트 분석 중...
                         </div>
                     )}
                  </div>
@@ -946,7 +1072,7 @@ function ContentManagement() {
                 <div className="mb-6 bg-blue-900/30 border border-blue-500/30 rounded-lg p-4">
                     <h4 className="font-bold text-blue-300 mb-2 flex items-center">
                         <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                        AI 분석 결과: {bulkItems.length}개의 공지사항 발견
+                        AI 분석 결과: {bulkItems.length}개의 항목 분리됨
                     </h4>
                     <div className="max-h-60 overflow-y-auto space-y-2 mb-3 pr-2 custom-scrollbar">
                         {bulkItems.map((item, idx) => (
@@ -961,9 +1087,9 @@ function ContentManagement() {
                         <button 
                             type="button" 
                             onClick={handleBulkSave}
-                            className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition w-full"
+                            className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition w-full shadow-lg"
                         >
-                            모두 저장하기
+                            전체 자동 등록
                         </button>
                         <button 
                             type="button"
@@ -1032,14 +1158,14 @@ function ContentManagement() {
                 )}
 
                 <div>
-                  <label htmlFor="content" className="block text-sm font-medium text-gray-400 mb-1">내용</label>
+                  <label htmlFor="content" className="block text-sm font-medium text-gray-400 mb-1">내용 (이미지 분석 결과가 여기 나타납니다)</label>
                   <textarea
                     id="content"
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     required
-                    rows={10}
-                    className="block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
+                    rows={12}
+                    className="block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition font-sans text-base leading-relaxed"
                     placeholder="내용을 입력하세요"
                   />
                 </div>
@@ -1126,7 +1252,7 @@ function ContentManagement() {
         {/* Delete Confirmation Modal */}
         {showDeleteConfirm && (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[70] p-4">
-                <div className="bg-gray-800 rounded-lg max-w-sm w-full p-6 shadow-2xl border border-gray-700">
+                <div className="bg-gray-800 rounded-lg max-sm w-full p-6 shadow-2xl border border-gray-700">
                     <h3 className="text-xl font-bold text-white mb-2">삭제 확인</h3>
                     <p className="text-gray-300 mb-6">
                         '<span className="font-semibold text-white">{showDeleteConfirm.title}</span>' 게시물을 정말 삭제하시겠습니까?
@@ -1324,6 +1450,8 @@ function App() {
     columns: 'bg-emerald-600 hover:bg-emerald-500',
     announcements: 'bg-orange-600 hover:bg-orange-500',
     prayers: 'bg-indigo-600 hover:bg-indigo-500',
+    mokjang: 'bg-violet-600 hover:bg-violet-500',
+    pillars: 'bg-amber-600 hover:bg-amber-500',
     admin: 'bg-rose-600 hover:bg-rose-500',
   };
 
@@ -1340,11 +1468,13 @@ function App() {
     { id: 'columns', label: '목회자칼럼' },
     { id: 'announcements', label: '공지사항' },
     { id: 'prayers', label: '매일기도문' },
+    { id: 'mokjang', label: '목장순서' },
+    { id: 'pillars', label: '세축네기둥' },
     { id: 'admin', label: '관리자' },
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-900 pb-20"> {/* pb-20 for bottom banner space */}
+    <div className="min-h-screen flex flex-col bg-gray-900 pb-20">
       <header className="bg-gray-800 p-4 text-center shadow-lg">
         <h1 className="text-2xl font-bold text-white">
           성은감리교회
@@ -1352,11 +1482,10 @@ function App() {
         </h1>
       </header>
 
-      <nav className="bg-gray-800 sticky top-0 z-10 shadow">
-        <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
-          <div className="relative flex items-center justify-center h-16">
-            <div className="flex items-center justify-center sm:items-stretch sm:justify-start">
-              <div className="flex space-x-2">
+      <nav className="bg-gray-800 sticky top-0 z-10 shadow overflow-x-auto custom-scrollbar">
+        <div className="max-w-7xl mx-auto px-2">
+          <div className="relative flex items-center justify-start sm:justify-center h-16">
+              <div className="flex space-x-2 py-2">
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
@@ -1367,7 +1496,7 @@ function App() {
                       activeTab === tab.id
                         ? 'text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-white'
                         : 'text-gray-200 opacity-80 hover:opacity-100'
-                    } relative px-3 py-4 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center`}
+                    } relative px-3 py-4 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 flex items-center justify-center whitespace-nowrap`}
                     aria-current={activeTab === tab.id ? 'page' : undefined}
                   >
                     <span>{tab.label}</span>
@@ -1377,7 +1506,6 @@ function App() {
                   </button>
                 ))}
               </div>
-            </div>
           </div>
         </div>
       </nav>
@@ -1387,6 +1515,8 @@ function App() {
         {activeTab === 'columns' && <ContentDisplay collectionName="columns" title="목회자칼럼" />}
         {activeTab === 'announcements' && <ContentDisplay collectionName="announcements" title="공지사항" />}
         {activeTab === 'prayers' && <ContentDisplay collectionName="prayers" title="매일기도문" />}
+        {activeTab === 'mokjang' && <MokjangOrder />}
+        {activeTab === 'pillars' && <ThreeAxesFourPillars />}
         {activeTab === 'admin' && <AdminPanel />}
       </main>
 
